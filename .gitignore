@@ -1,22 +1,23 @@
-# Build
-dist/
-build/
-*.build/
-*.dist/
-*.onefile-build/
-__pycache__/
-*.pyc
+# ============================================================================
+#  Strategie : on IGNORE TOUT par defaut, puis on autorise UNIQUEMENT les
+#  fichiers necessaires a la compilation de l'exe.
+#  -> protege contre les "git add -A" qui pousseraient .venv/, tes medias,
+#     et tes autres scripts (cc.py, check.py...) sur GitHub.
+# ============================================================================
 
-# Données / secrets runtime — restent sur le VPS, PAS dans le repo
-accounts_created.json
-posting_history.json
-proxies.json
-swipe_proxies.json
-swipe_proxies*.json
-panel_settings.json
-config.json
+# 1) Tout ignorer...
+*
+# 2) ...mais descendre dans les dossiers (sinon impossible de whitelister dedans)
+!*/
 
-# Sauvegardes locales
-*copy*.py
-*copy*.html
-.DS_Store
+# 3) Whitelist explicite des fichiers du build (chemins depuis la racine) :
+!/.gitignore
+!/server.py
+!/insta_core.py
+!/worker.py
+!/panel.html
+!/build_windows.bat
+!/build_on_vps.ps1
+!/BUILD.md
+!/CLAUDE.md
+!/.github/workflows/build-windows.yml
