@@ -204,6 +204,7 @@ def add_story_to_highlight(device: str, phone_id: str, highlight_name: str = "tu
         _click_allow_if_present(device)
         if any(kw in xml for kw in ["Your story", "your story", "com.instagram.android"]):
             print(f"  ✅ Feed détecté ({tick+1}s)")
+            handle_notifications_popup(device, safe_ui_dump(device, "/sdcard/ui_notif_popup.xml"))
             break
         print(f"  ⏳ Attente feed ({tick+1}/20)...")
         time.sleep(1)
@@ -1382,7 +1383,10 @@ photo_folder_index = 0
 def adb(device, command, timeout=30):
     full_cmd = f'"{ADB_PATH}" -s {device} {command}'
     try:
-        return subprocess.run(full_cmd, shell=True, capture_output=True, text=True, timeout=timeout)
+        # encoding/errors explicites : sous Windows, text=True décode en cp1252 par
+        # défaut et plante (UnicodeDecodeError) sur les emojis/caractères du XML UI.
+        return subprocess.run(full_cmd, shell=True, capture_output=True, text=True,
+                              timeout=timeout, encoding="utf-8", errors="replace")
     except subprocess.TimeoutExpired:
         print(f"  ⚠️ ADB timeout ({timeout}s) : {command[:60]}")
         return subprocess.CompletedProcess(full_cmd, returncode=1, stdout="", stderr="timeout")
@@ -1443,6 +1447,41 @@ def handle_refresh_page(device, xml):
     adb(device, f"shell input tap {_w//2} {int(_h*0.87)}")
     print(f"  🔄 Page d'erreur (bouton non localisé) — tap zone Refresh ({_w//2},{int(_h*0.87)})")
     time.sleep(2.5)
+    return True
+
+
+def handle_notifications_popup(device, xml):
+    """
+    Détecte le popup "Your notifications are off" (Turn on / Not now) qui surgit
+    à l'ouverture d'Instagram, et clique 'Not now' pour le fermer.
+    Retourne True si le popup a été détecté et fermé.
+    À appeler dans les flows (warmup, post, reel...) une fois le feed atteint.
+    """
+    if not any(kw in xml for kw in [
+        "notifications are off", "Your notifications", "Turn on notifications",
+        "Don't miss new likes", "Don’t miss new likes",
+    ]):
+        return False
+    for _nn in ["Not now", "Not Now", "NOT NOW", "Pas maintenant", "Plus tard"]:
+        for _nnp in [
+            rf'text="{re.escape(_nn)}"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"',
+            rf'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"[^>]*text="{re.escape(_nn)}"',
+            rf'content-desc="{re.escape(_nn)}"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"',
+        ]:
+            _nnm = re.findall(_nnp, xml)
+            if _nnm:
+                _x1, _y1, _x2, _y2 = map(int, _nnm[0])
+                adb(device, f"shell input tap {(_x1+_x2)//2} {(_y1+_y2)//2}")
+                print(f"  🔔 Popup notifications — '{_nn}' cliqué")
+                time.sleep(1.2)
+                return True
+    # Popup détecté mais bouton introuvable → tap zone basse du popup (Not now)
+    _res = adb(device, "shell wm size")
+    _m = re.search(r'(\d+)x(\d+)', _res.stdout)
+    _w, _h = (int(_m.group(1)), int(_m.group(2))) if _m else (1080, 2340)
+    adb(device, f"shell input tap {_w//2} {int(_h*0.66)}")
+    print(f"  🔔 Popup notifications (bouton non localisé) — tap zone 'Not now'")
+    time.sleep(1.2)
     return True
 
 
@@ -3222,6 +3261,7 @@ def add_link_on_device(phone_id: str, link_url: str) -> bool:
             return False
         if any(kw in xml for kw in ["com.instagram.android", "Your story", "For you"]):
             print(f"  ✅ Feed détecté ({tick+1}s)")
+            handle_notifications_popup(device, safe_ui_dump(device, "/sdcard/ui_notif_popup.xml"))
             break
         print(f"  ⏳ Attente feed ({tick+1}/15)...")
         time.sleep(1)
@@ -3565,6 +3605,7 @@ def add_bio_on_device(phone_id: str, bio: str) -> bool:
             return False
         if any(kw in xml for kw in ["com.instagram.android", "Your story", "For you"]):
             print(f"  ✅ Feed détecté ({tick+1}s)")
+            handle_notifications_popup(device, safe_ui_dump(device, "/sdcard/ui_notif_popup.xml"))
             break
         print(f"  ⏳ Attente feed ({tick+1}/15)...")
         time.sleep(1)
@@ -3933,6 +3974,7 @@ def post_reel_on_device(phone_id: str, media_paths: list) -> bool:
             return False
         if any(kw in xml for kw in ["Your story", "For you"]):
             print(f"  ✅ Feed détecté ({tick+1}s)")
+            handle_notifications_popup(device, safe_ui_dump(device, "/sdcard/ui_notif_popup.xml"))
             break
         print(f"  ⏳ Attente feed ({tick+1}/20) — tap home...")
         adb(device, f"shell input tap {int(_w*0.09)} {int(_h*0.895)}")
@@ -4837,6 +4879,7 @@ def post_feed_on_device(phone_id: str, media_paths: list) -> bool:
         xml = adb(device, "shell cat /sdcard/ui_feed_post.xml").stdout
         if any(kw in xml for kw in ["Your story", "For you"]):
             print(f"  ✅ Feed détecté ({tick+1}s)")
+            handle_notifications_popup(device, safe_ui_dump(device, "/sdcard/ui_notif_popup.xml"))
             break
         print(f"  ⏳ Attente feed ({tick+1}/20) — tap home...")
         adb(device, f"shell input tap {int(_w*0.09)} {int(_h*0.895)}")
@@ -6665,6 +6708,7 @@ def post_story_on_device(phone_id: str, media_path: str,
         ]
         if any(kw in xml_feed for kw in _feed_keywords):
             print(f"  ✅ Feed détecté ({_feed_attempt+1}/3)")
+            handle_notifications_popup(device, safe_ui_dump(device, "/sdcard/ui_notif_popup.xml"))
             _feed_ok = True
             break
 
@@ -10350,7 +10394,7 @@ def run():
             code = parts[2]
             subprocess.run(f'"{ADB_PATH}" connect {device}', shell=True, capture_output=True)
             time.sleep(1)
-            result = subprocess.run(f'"{ADB_PATH}" -s {device} shell glogin {code}', shell=True, capture_output=True, text=True)
+            result = subprocess.run(f'"{ADB_PATH}" -s {device} shell glogin {code}', shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
             print(f"  glogin : {result.stdout.strip()}")
             if "success" in result.stdout.lower() or "already logged" in result.stdout.lower():
                 photo_folder = get_next_photo_folder()
@@ -10473,7 +10517,7 @@ def run():
         for attempt in range(10):
             subprocess.run(f'"{ADB_PATH}" connect {device}', shell=True, capture_output=True)
             time.sleep(3)
-            result = subprocess.run(f'"{ADB_PATH}" -s {device} shell glogin {pwd}', shell=True, capture_output=True, text=True)
+            result = subprocess.run(f'"{ADB_PATH}" -s {device} shell glogin {pwd}', shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
             print(f"  [{phone_label}] glogin [{attempt+1}] : {result.stdout.strip()}")
             if "success" in result.stdout.lower():
                 connected = True
@@ -10996,6 +11040,7 @@ def warmup_account_on_device(phone_id: str, duration_minutes: int, usernames: li
             return False
         if any(kw in xml for kw in ["Your story", "For you"]):
             print(f"  ✅ Feed détecté ({tick+1}s)")
+            handle_notifications_popup(device, safe_ui_dump(device, "/sdcard/ui_notif_popup.xml"))
             break
         # Feed pas encore visible : tap home (gère Reels, chargement lent, etc.)
         print(f"  ⏳ Attente feed ({tick+1}/15) — tap home...")
@@ -11240,7 +11285,7 @@ def _warmup_explore_and_follow(device, w, h, username: str) -> bool:
     for tick in range(8):
         adb(device, "shell uiautomator dump /sdcard/ui_explore_search.xml")
         time.sleep(0.5)
-        xml_ex = adb(device, "shell cat /sdcard/ui_explore_search.xml").stdout
+        xml_ex = adb(device, "shell cat /sdcard/ui_explore_search.xml").stdout or ""
         for hint in ["Search", "Search with Meta AI", "search", "Rechercher"]:
             for pat in [
                 rf'hint="{re.escape(hint)}"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"',

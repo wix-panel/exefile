@@ -1518,6 +1518,8 @@ def run_worker_manager(config, sess_state, stop_flag):
                 stdout=_sp.PIPE,
                 stderr=_sp.STDOUT,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 bufsize=1,
                 cwd=_app_dir(),
             )
@@ -3999,7 +4001,7 @@ def _run_swipe_session_thread(phone_ids, proxy, swipe_count,
                                 for _attempt in range(5):
                                     _sp.run(f'"{instagram_code.ADB_PATH}" connect {_device}', shell=True, capture_output=True)
                                     time.sleep(2)
-                                    _r = _sp.run(f'"{instagram_code.ADB_PATH}" -s {_device} shell glogin {_pwd}', shell=True, capture_output=True, text=True)
+                                    _r = _sp.run(f'"{instagram_code.ADB_PATH}" -s {_device} shell glogin {_pwd}', shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
                                     if "success" in _r.stdout.lower():
                                         break
                                 _statut = instagram_code.check_instagram_account(_device)
