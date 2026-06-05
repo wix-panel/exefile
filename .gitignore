@@ -1,0 +1,22 @@
+# Build
+dist/
+build/
+*.build/
+*.dist/
+*.onefile-build/
+__pycache__/
+*.pyc
+
+# Données / secrets runtime — restent sur le VPS, PAS dans le repo
+accounts_created.json
+posting_history.json
+proxies.json
+swipe_proxies.json
+swipe_proxies*.json
+panel_settings.json
+config.json
+
+# Sauvegardes locales
+*copy*.py
+*copy*.html
+.DS_Store
