@@ -4176,7 +4176,7 @@ def get_highlight_registry():
     if not INSTAGRAM_CODE_LOADED:
         return jsonify({"statuses": []})
     try:
-        from code import _has_highlight
+        from insta_core import _has_highlight
     except Exception:
         try:
             _has_highlight = instagram_code._has_highlight
