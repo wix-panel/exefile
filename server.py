@@ -39,9 +39,28 @@ def _bundle_dir():
     return os.path.dirname(os.path.abspath(__file__))   # Nuitka / dev
 
 def _app_dir():
-    """Dossier persistant (écriture des .json) : à côté de l'exécutable."""
+    """Dossier persistant (écriture des .json) : à côté de l'exécutable RÉEL.
+
+    ⚠️ Avec Nuitka onefile, l'exe s'extrait dans un dossier temporaire qui change
+    à chaque lancement (…/Temp/onefile_xxx/). Il NE FAUT PAS écrire là (perdu au
+    redémarrage). On vise le dossier du binaire d'origine lancé par l'utilisateur.
+    """
     if IS_FROZEN:
-        return os.path.dirname(os.path.abspath(sys.executable))
+        candidates = [
+            os.environ.get("NUITKA_ONEFILE_BINARY"),  # fourni par Nuitka onefile (autoritatif)
+            sys.argv[0] if sys.argv else None,
+            sys.executable,
+        ]
+        for c in candidates:
+            if not c:
+                continue
+            d = os.path.dirname(os.path.abspath(c))
+            dl = d.replace("/", "\\").lower()
+            # Écarter le dossier temporaire d'extraction Nuitka onefile
+            if d and "onefile_" not in os.path.basename(d).lower() and "\\temp\\" not in dl:
+                return d
+        # Dernier recours
+        return os.path.dirname(os.path.abspath(sys.argv[0] or sys.executable))
     return os.path.dirname(os.path.abspath(__file__))
 
 # Partagé avec code.py / worker.py pour qu'ils écrivent au même endroit.
@@ -5106,8 +5125,10 @@ def update_panel_settings():
         if "ANDROID_VERSION" in data and data["ANDROID_VERSION"] in ("Android 13", "Android 14"):
             instagram_code.ANDROID_VERSION = data["ANDROID_VERSION"]
     _save_panel_settings()
-    push_log("info", f"⚙️ Limites posting — fenêtre: {POSTING_COOLDOWN_HOURS}h | posts: {MAX_POSTS_PER_DAY} | reels: {MAX_REELS_PER_DAY} | stories: {MAX_STORIES_PER_DAY} | âge min: {MIN_ACCOUNT_AGE_HOURS}h | warmup requis: {REQUIRE_WARMUP}")
-    return jsonify({"success": True})
+    _saved_tags = (instagram_code.MENTION_TAGS if INSTAGRAM_CODE_LOADED else [])
+    push_log("info", f"⚙️ Limites posting — fenêtre: {POSTING_COOLDOWN_HOURS}h | posts: {MAX_POSTS_PER_DAY} | reels: {MAX_REELS_PER_DAY} | stories: {MAX_STORIES_PER_DAY} | âge min: {MIN_ACCOUNT_AGE_HOURS}h | warmup requis: {REQUIRE_WARMUP} | tags: {_saved_tags}")
+    push_log("info", f"💾 Réglages enregistrés dans : {PANEL_SETTINGS_FILE}")
+    return jsonify({"success": True, "saved_to": PANEL_SETTINGS_FILE})
 
 @app.route("/api/posting_history", methods=["GET"])
 def get_posting_history():
@@ -5121,7 +5142,8 @@ if __name__ == "__main__":
     sys.__stdout__.write("\n" + "="*55 + "\n")
     sys.__stdout__.write("  InstagramOps Server\n")
     sys.__stdout__.write("="*55 + "\n")
-    sys.__stdout__.write(f"  Panel : http://localhost:5004\n")
+    sys.__stdout__.write(f"  Panel   : http://localhost:5004\n")
+    sys.__stdout__.write(f"  Données : {_DATA_DIR}\n")
     sys.__stdout__.write("="*55 + "\n\n")
     sys.__stdout__.flush()
     app.run(host="0.0.0.0", port=5004, debug=False, threaded=True)
