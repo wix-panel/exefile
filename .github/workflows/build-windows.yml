@@ -3,11 +3,13 @@ name: Build Windows EXE
 # Compile InstagramOps en .exe Windows sur un runner Windows GitHub (gratuit).
 # Le code source reste dans le repo (prive) ; seul l'.exe est telecharge.
 #
-# Declenchement : manuel (onglet Actions -> Build Windows EXE -> Run workflow)
+# Declenchement : automatique a chaque push sur main, manuel (Run workflow),
 # ou a chaque tag "v*".
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
 
