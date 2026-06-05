@@ -45,23 +45,38 @@ def _app_dir():
     à chaque lancement (…/Temp/onefile_xxx/). Il NE FAUT PAS écrire là (perdu au
     redémarrage). On vise le dossier du binaire d'origine lancé par l'utilisateur.
     """
-    if IS_FROZEN:
-        candidates = [
-            os.environ.get("NUITKA_ONEFILE_BINARY"),  # fourni par Nuitka onefile (autoritatif)
-            sys.argv[0] if sys.argv else None,
-            sys.executable,
-        ]
-        for c in candidates:
-            if not c:
-                continue
+    if not IS_FROZEN:
+        return os.path.dirname(os.path.abspath(__file__))
+
+    # Dossiers candidats où peut se trouver le vrai exe + les données
+    cands = []
+    for c in (os.environ.get("NUITKA_ONEFILE_BINARY"),   # fourni par Nuitka onefile
+              sys.argv[0] if sys.argv else None,
+              sys.executable):
+        if c:
             d = os.path.dirname(os.path.abspath(c))
-            dl = d.replace("/", "\\").lower()
-            # Écarter le dossier temporaire d'extraction Nuitka onefile
-            if d and "onefile_" not in os.path.basename(d).lower() and "\\temp\\" not in dl:
-                return d
-        # Dernier recours
-        return os.path.dirname(os.path.abspath(sys.argv[0] or sys.executable))
-    return os.path.dirname(os.path.abspath(__file__))
+            if d not in cands:
+                cands.append(d)
+    cwd = os.path.abspath(os.getcwd())
+    if cwd not in cands:
+        cands.append(cwd)
+
+    def _is_temp(d):
+        dl = d.replace("/", "\\").lower()
+        return "onefile_" in os.path.basename(d).lower() or "\\temp\\" in dl
+
+    _markers = ("panel_settings.json", "config.json", "proxies.json",
+                "InstagramOps.exe", "accounts_created.json")
+    # 1) Un dossier non-temp qui contient DÉJÀ des données/l'exe → c'est LE bon
+    for d in cands:
+        if not _is_temp(d) and any(os.path.exists(os.path.join(d, f)) for f in _markers):
+            return d
+    # 2) Sinon, premier dossier non-temp
+    for d in cands:
+        if not _is_temp(d):
+            return d
+    # 3) Dernier recours
+    return cands[0] if cands else os.path.dirname(os.path.abspath(sys.executable))
 
 # Partagé avec code.py / worker.py pour qu'ils écrivent au même endroit.
 os.environ.setdefault("DATA_DIR", _app_dir())
