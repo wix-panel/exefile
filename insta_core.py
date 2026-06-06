@@ -189,7 +189,7 @@ def add_story_to_highlight(device: str, phone_id: str, highlight_name: str = "tu
     subprocess.run(
         f'"{ADB_PATH}" -s {device} shell monkey -p com.instagram.android '
         f'-c android.intent.category.LAUNCHER 1',
-        shell=True, capture_output=True, text=True
+        shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace"
     )
     time.sleep(6)
     _click_allow_if_present(device)
@@ -1753,7 +1753,7 @@ def push_photos_to_device(device, folder_path, base_photos_dir=None):
             remote_path = f"/sdcard/DCIM/instagram_photos/{photo}"
             result = subprocess.run(
                 [ADB_PATH, "-s", device, "push", local_path, remote_path],
-                capture_output=True, text=True
+                capture_output=True, text=True, encoding="utf-8", errors="replace"
             )
             if result.returncode == 0:
                 print(f"  Photo envoyée : {photo}")
@@ -2262,7 +2262,7 @@ def click_button(device, texts):
     )
     result = subprocess.run(
         f'"{ADB_PATH}" -s {device} shell cat /sdcard/ui.xml',
-        shell=True, capture_output=True, text=True
+        shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace"
     )
     for text in texts:
         matches = re.findall(rf'text="{re.escape(text)}"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', result.stdout)
@@ -2567,7 +2567,7 @@ def open_instagram_after_media(device, phone_id=None, wait_sec=5):
         subprocess.run(
             f'"{ADB_PATH}" -s {device} shell monkey -p com.instagram.android '
             f'-c android.intent.category.LAUNCHER 1',
-            shell=True, capture_output=True, text=True, timeout=10
+            shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10
         )
 
     def _tap_allow_if_present(xml):
@@ -3222,7 +3222,7 @@ def add_link_on_device(phone_id: str, link_url: str) -> bool:
         time.sleep(3)
         result = subprocess.run(
             f'"{ADB_PATH}" -s {device} shell glogin {pwd}',
-            shell=True, capture_output=True, text=True
+            shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace"
         )
         print(f"  glogin [{attempt+1}] → {result.stdout.strip()}")
         if "success" in result.stdout.lower():
@@ -3240,7 +3240,7 @@ def add_link_on_device(phone_id: str, link_url: str) -> bool:
     subprocess.run(
         f'"{ADB_PATH}" -s {device} shell monkey -p com.instagram.android '
         f'-c android.intent.category.LAUNCHER 1',
-        shell=True, capture_output=True, text=True
+        shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace"
     )
     time.sleep(6)
     _click_allow_if_present(device)
@@ -3564,7 +3564,7 @@ def add_bio_on_device(phone_id: str, bio: str) -> bool:
         time.sleep(3)
         result = subprocess.run(
             f'"{ADB_PATH}" -s {device} shell glogin {pwd}',
-            shell=True, capture_output=True, text=True
+            shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace"
         )
         print(f"  glogin [{attempt+1}] → {result.stdout.strip()}")
         if "success" in result.stdout.lower():
@@ -3582,7 +3582,7 @@ def add_bio_on_device(phone_id: str, bio: str) -> bool:
     subprocess.run(
         f'"{ADB_PATH}" -s {device} shell monkey -p com.instagram.android '
         f'-c android.intent.category.LAUNCHER 1',
-        shell=True, capture_output=True, text=True
+        shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace"
     )
     time.sleep(6)
     _click_allow_if_present(device)
@@ -3911,7 +3911,7 @@ def post_reel_on_device(phone_id: str, media_paths: list) -> bool:
         time.sleep(3)
         result = subprocess.run(
             f'"{ADB_PATH}" -s {device} shell glogin {pwd}',
-            shell=True, capture_output=True, text=True
+            shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace"
         )
         print(f"  glogin [{attempt+1}] → {result.stdout.strip()}")
         if "success" in result.stdout.lower():
@@ -3932,7 +3932,7 @@ def post_reel_on_device(phone_id: str, media_paths: list) -> bool:
         remote = f"{remote_dir}/{filename}"
         push_result = subprocess.run(
             [ADB_PATH, "-s", device, "push", media_path, remote],
-            capture_output=True, text=True
+            capture_output=True, text=True, encoding="utf-8", errors="replace"
         )
         if push_result.returncode == 0:
             print(f"  ✅ Média poussé : {filename}")
@@ -3954,7 +3954,7 @@ def post_reel_on_device(phone_id: str, media_paths: list) -> bool:
     subprocess.run(
         f'"{ADB_PATH}" -s {device} shell monkey -p com.instagram.android '
         f'-c android.intent.category.LAUNCHER 1',
-        shell=True, capture_output=True, text=True
+        shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace"
     )
     time.sleep(6)
     _click_allow_if_present(device)
@@ -4463,7 +4463,7 @@ def insta_step_get_started(device):
             subprocess.run(
                 f'"{ADB_PATH}" -s {device} shell monkey -p com.instagram.android '
                 f'-c android.intent.category.LAUNCHER 1',
-                shell=True, capture_output=True, text=True
+                shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace"
             )
             print(f"  ⏳ Attente interface après relance (5s)...")
             time.sleep(5)
@@ -4821,7 +4821,7 @@ def post_feed_on_device(phone_id: str, media_paths: list) -> bool:
         time.sleep(3)
         result = subprocess.run(
             f'"{ADB_PATH}" -s {device} shell glogin {pwd}',
-            shell=True, capture_output=True, text=True
+            shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace"
         )
         print(f"  glogin [{attempt+1}] → {result.stdout.strip()}")
         if "success" in result.stdout.lower():
@@ -4842,7 +4842,7 @@ def post_feed_on_device(phone_id: str, media_paths: list) -> bool:
         remote = f"{remote_dir}/{filename}"
         push_result = subprocess.run(
             [ADB_PATH, "-s", device, "push", media_path, remote],
-            capture_output=True, text=True
+            capture_output=True, text=True, encoding="utf-8", errors="replace"
         )
         if push_result.returncode == 0:
             print(f"  ✅ Photo poussée : {filename}")
@@ -4865,7 +4865,7 @@ def post_feed_on_device(phone_id: str, media_paths: list) -> bool:
     subprocess.run(
         f'"{ADB_PATH}" -s {device} shell monkey -p com.instagram.android '
         f'-c android.intent.category.LAUNCHER 1',
-        shell=True, capture_output=True, text=True
+        shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace"
     )
     time.sleep(6)
 
@@ -6259,7 +6259,7 @@ def post_story_on_device(phone_id: str, media_path: str,
         time.sleep(3)
         result = subprocess.run(
             f'"{ADB_PATH}" -s {device} shell glogin {pwd}',
-            shell=True, capture_output=True, text=True
+            shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace"
         )
         print(f"  glogin [{attempt+1}] → {result.stdout.strip()}")
         if "success" in result.stdout.lower():
@@ -6278,7 +6278,7 @@ def post_story_on_device(phone_id: str, media_path: str,
     adb(device, "shell mkdir -p /sdcard/DCIM/story_media")
     push_result = subprocess.run(
         [ADB_PATH, "-s", device, "push", media_path, remote],
-        capture_output=True, text=True
+        capture_output=True, text=True, encoding="utf-8", errors="replace"
     )
     if push_result.returncode != 0:
         print(f"  ❌ Push média échoué : {push_result.stderr.strip()[:80]}")
@@ -6297,7 +6297,7 @@ def post_story_on_device(phone_id: str, media_path: str,
     subprocess.run(
         f'"{ADB_PATH}" -s {device} shell monkey -p com.instagram.android '
         f'-c android.intent.category.LAUNCHER 1',
-        shell=True, capture_output=True, text=True
+        shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace"
     )
     time.sleep(5)
     _click_allow_if_present(device)
@@ -6718,7 +6718,7 @@ def post_story_on_device(phone_id: str, media_path: str,
         subprocess.run(
             f'"{ADB_PATH}" -s {device} shell monkey -p com.instagram.android '
             f'-c android.intent.category.LAUNCHER 1',
-            shell=True, capture_output=True, text=True
+            shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace"
         )
         time.sleep(6)
         _click_allow_if_present(device)
@@ -7309,7 +7309,7 @@ def open_instagram(device, photo_folder, city=None, lat=None, lon=None,
             adb(device, "shell mkdir -p /sdcard/DCIM/profile_photo")
             push_res = subprocess.run(
                 [ADB_PATH, "-s", device, "push", profile_photo_path, remote_profile],
-                capture_output=True, text=True
+                capture_output=True, text=True, encoding="utf-8", errors="replace"
             )
             if push_res.returncode != 0:
                 print(f"  ⚠️ Erreur push photo profil (essai {_pp_try+1}/3) : {push_res.stderr.strip()[:60]}")
@@ -7641,7 +7641,7 @@ def open_instagram(device, photo_folder, city=None, lat=None, lon=None,
                     subprocess.run(
                         f'"{ADB_PATH}" -s {device} shell monkey -p com.instagram.android '
                         f'-c android.intent.category.LAUNCHER 1',
-                        shell=True, capture_output=True, text=True
+                        shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace"
                     )
                     print(f"  ⏳ Attente interface Instagram après relance (max 30s)...")
                     _launch_keywords = [
@@ -10236,7 +10236,7 @@ def run_swipe_session(phone_id: str,
             try:
                 result = subprocess.run(
                     f'"{ADB_PATH}" -s {device} shell glogin {pwd}',
-                    shell=True, capture_output=True, text=True, timeout=15
+                    shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=15
                 )
                 output = (result.stdout + result.stderr).strip()
             except subprocess.TimeoutExpired:
@@ -10921,7 +10921,7 @@ def run_check_session(config, stop_flag):
             time.sleep(3)
             result = subprocess.run(
                 f'"{ADB_PATH}" -s {device} shell glogin {pwd}',
-                shell=True, capture_output=True, text=True
+                shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace"
             )
             if "success" in result.stdout.lower():
                 connected = True
@@ -11003,7 +11003,7 @@ def warmup_account_on_device(phone_id: str, duration_minutes: int, usernames: li
         time.sleep(3)
         result = subprocess.run(
             f'"{ADB_PATH}" -s {device} shell glogin {pwd}',
-            shell=True, capture_output=True, text=True
+            shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace"
         )
         if "success" in result.stdout.lower():
             connected = True
@@ -11020,7 +11020,7 @@ def warmup_account_on_device(phone_id: str, duration_minutes: int, usernames: li
     subprocess.run(
         f'"{ADB_PATH}" -s {device} shell monkey -p com.instagram.android '
         f'-c android.intent.category.LAUNCHER 1',
-        shell=True, capture_output=True, text=True
+        shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace"
     )
     time.sleep(6)
     _click_allow_if_present(device)
@@ -11166,7 +11166,7 @@ def _warmup_relaunch_insta(device, w, h):
     subprocess.run(
         f'"{ADB_PATH}" -s {device} shell monkey -p com.instagram.android '
         f'-c android.intent.category.LAUNCHER 1',
-        shell=True, capture_output=True, text=True
+        shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace"
     )
     time.sleep(5)
     _click_allow_if_present(device)
