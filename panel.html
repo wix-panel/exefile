@@ -4819,7 +4819,7 @@ function handlePostQuickDrop(event) {
   const zone = document.getElementById('post-quick-drop');
   zone.style.borderColor = 'var(--border2)';
   zone.style.background = 'var(--bg3)';
-  const files = Array.from(event.dataTransfer.files).filter(f => f.type.startsWith('image/')).slice(0, 3);
+  const files = Array.from(event.dataTransfer.files).filter(f => f.type.startsWith('image/'));
   if (files.length) handlePostQuickFiles(files);
 }
 
@@ -4868,7 +4868,7 @@ function handleReelQuickDrop(event) {
   const zone = document.getElementById('reel-quick-drop');
   zone.style.borderColor = 'var(--border2)';
   zone.style.background = 'var(--bg3)';
-  const files = Array.from(event.dataTransfer.files).slice(0, 3);
+  const files = Array.from(event.dataTransfer.files);
   if (files.length) handleReelQuickFiles(files);
 }
 
