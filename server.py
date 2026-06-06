@@ -1204,7 +1204,7 @@ def run_session_with_flag(config, sess_state, stop_flag):
                         time.sleep(3)
                         result = subprocess.run(
                             f'"{instagram_code.ADB_PATH}" -s {device} shell glogin {pwd}',
-                            shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace"
+                            shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60
                         )
                         push_log("info", f"  glogin [{attempt+1}] → {result.stdout.strip()}")
                         if "success" in result.stdout.lower():
@@ -2840,7 +2840,7 @@ def _run_simultane(config, sim_cfg, old_stdout, old_stderr):
                 time.sleep(3)
                 result = subprocess.run(
                     f'"{instagram_code.ADB_PATH}" -s {device} shell glogin {pwd}',
-                    shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace"
+                    shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60
                 )
                 if "success" in result.stdout.lower():
                     connected = True
@@ -3168,7 +3168,7 @@ def run_session(config):
                         time.sleep(3)
                         result = subprocess.run(
                             f'"{instagram_code.ADB_PATH}" -s {device} shell glogin {pwd}',
-                            shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace"
+                            shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60
                         )
                         push_log("info", f"  glogin [{attempt+1}] → {result.stdout.strip()}")
                         if "success" in result.stdout.lower():
@@ -3508,7 +3508,7 @@ def run_session(config):
                         time.sleep(3)
                         result = subprocess.run(
                             f'"{instagram_code.ADB_PATH}" -s {device} shell glogin {pwd}',
-                            shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace"
+                            shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60
                         )
                         push_log("info", f"  glogin [{attempt+1}] → {result.stdout.strip()}")
                         if "success" in result.stdout.lower():
