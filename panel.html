@@ -657,6 +657,33 @@ input[type=range]:focus{box-shadow:none;}
           </div>
         </div>
 
+        <!-- SOUS-BOUTON : Lien cliquable sticker -->
+        <div style="margin-top:10px;padding:12px 14px;background:var(--bg4);border:1px solid var(--border2);border-radius:10px;">
+          <div class="toggle-row" style="border-bottom:none;padding-bottom:0;">
+            <div style="display:flex;align-items:center;gap:10px;flex:1;">
+              <div style="width:28px;height:28px;border-radius:7px;background:rgba(0,122,255,0.12);border:1px solid rgba(0,122,255,0.3);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <svg style="width:14px;height:14px;stroke:#4A9EFF;stroke-width:2;fill:none;" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+              </div>
+              <div>
+                <div class="toggle-lbl">Lien cliquable</div>
+                <div class="toggle-desc">Ajoute un sticker lien sur la story avant publication</div>
+              </div>
+            </div>
+            <div class="toggle" id="toggle-story-link" onclick="toggleStoryLink(this)"></div>
+          </div>
+
+          <!-- Champ URL (caché par défaut) -->
+          <div id="story-link-section" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:12px;">
+            <div class="section-title" style="margin-bottom:8px;">🔗 URL du lien sticker</div>
+            <input id="story-link-input" type="url" placeholder="https://exemple.com/votre-lien"
+              style="width:100%;box-sizing:border-box;padding:9px 12px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:12.5px;font-family:var(--mono);outline:none;"
+              oninput="updateStoryLinkStatus()"
+              onfocus="this.style.borderColor='#4A9EFF'"
+              onblur="this.style.borderColor='var(--border2)'" />
+            <div id="story-link-status" style="margin-top:5px;font-size:11px;color:var(--text3);"></div>
+          </div>
+        </div>
+
       </div>
 
       <!-- ACTION : POST FEED -->
@@ -1938,6 +1965,25 @@ function clearPostMedia() {
   document.getElementById('post-file-input').value = '';
 }
 
+// ── STORY LINK STATE ──
+let storyLinkEnabled = false;
+
+function toggleStoryLink(el) {
+  el.classList.toggle('on');
+  storyLinkEnabled = el.classList.contains('on');
+  document.getElementById('story-link-section').style.display = storyLinkEnabled ? 'block' : 'none';
+  updateStoryLinkStatus();
+}
+
+function updateStoryLinkStatus() {
+  const status = document.getElementById('story-link-status');
+  if (!status) return;
+  const val = (document.getElementById('story-link-input') || {}).value || '';
+  if (!val.trim()) { status.textContent = ''; return; }
+  try { new URL(val); status.textContent = '✅ URL valide'; status.style.color = 'var(--green)'; }
+  catch { status.textContent = '⚠️ URL invalide'; status.style.color = 'var(--accent2)'; }
+}
+
 // ── HIGHLIGHT STATE ──
 let selectedHighlightName = 'tuto 1';
 let highlightEnabled = false;
@@ -1990,12 +2036,20 @@ function toggleActionStory(el) {
   document.getElementById('story-media-section').style.display = on ? 'block' : 'none';
   if (!on) {
     clearStoryMedia();
-    // Reset highlight aussi
+    // Reset highlight
     highlightEnabled = false;
     const hlToggle = document.getElementById('toggle-add-highlight');
     if (hlToggle) hlToggle.classList.remove('on');
     const hlSection = document.getElementById('highlight-name-section');
     if (hlSection) hlSection.style.display = 'none';
+    // Reset lien sticker
+    storyLinkEnabled = false;
+    const lnkToggle = document.getElementById('toggle-story-link');
+    if (lnkToggle) lnkToggle.classList.remove('on');
+    const lnkSection = document.getElementById('story-link-section');
+    if (lnkSection) lnkSection.style.display = 'none';
+    const lnkInput = document.getElementById('story-link-input');
+    if (lnkInput) lnkInput.value = '';
   }
   updateInstaReadyState();
 }
@@ -2264,17 +2318,24 @@ const warmupOn = document.getElementById('toggle-action-warmup').classList.conta
 
   if (storyOn && storyMediaFile) {
     const hlLabel = highlightEnabled ? ` + à la une '${selectedHighlightName}'` : '';
-    notify(`📤 Upload Story${hlLabel} en cours...`, 'info');
+    const storyLinkUrl = storyLinkEnabled ? (document.getElementById('story-link-input') || {}).value || '' : '';
+    if (storyLinkEnabled && !storyLinkUrl.trim()) {
+      notify('⚠️ Entrez une URL pour le lien sticker story', 'error');
+      return;
+    }
+    const lnkLabel = storyLinkUrl ? ' + 🔗 lien' : '';
+    notify(`📤 Upload Story${hlLabel}${lnkLabel} en cours...`, 'info');
     const formData = new FormData();
     formData.append('media', storyMediaFile);
     sel.forEach(p => formData.append('phone_ids', String(p.id)));
     formData.append('add_to_highlight', highlightEnabled ? 'true' : 'false');
     formData.append('highlight_name', selectedHighlightName);
+    if (storyLinkUrl) formData.append('story_link', storyLinkUrl);
     try {
       const res = await fetch('/api/instagram/post_story', { method: 'POST', body: formData });
       const data = await res.json();
       if (data.error) notify(data.error, 'error');
-      else notify(`✅ Story${hlLabel} lancée sur ${sel.length} téléphone(s)`, 'success');
+      else notify(`✅ Story${hlLabel}${lnkLabel} lancée sur ${sel.length} téléphone(s)`, 'success');
     } catch(e) { notify('Erreur story : ' + e.message, 'error'); }
   }
 

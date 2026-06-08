@@ -2038,6 +2038,49 @@ def enable_data_saver(device: str):
         print(f"  ⚠️ Data Saver erreur : {e}")
 
 
+def _reduce_data_creation(device: str):
+    """
+    Réduit la consommation de data pendant la création de compte.
+    Chaque commande est isolée dans un try/except — aucun bug possible sur l'automatisation.
+    """
+    print(f"  📉 Réduction consommation data...")
+
+    # 1. Data Saver Android (bloque la data de fond pour toutes les apps)
+    try:
+        adb(device, "shell cmd netpolicy set restrict-background true")
+        adb(device, "shell settings put global data_saver_enabled 1")
+        print(f"  ✅ Data Saver activé")
+    except Exception as e:
+        print(f"  ⚠️ Data Saver : {e}")
+
+    # 2. Désactiver les mises à jour automatiques Play Store
+    try:
+        adb(device, "shell settings put global auto-update-apps 0")
+        print(f"  ✅ Mises à jour auto Play Store désactivées")
+    except Exception as e:
+        print(f"  ⚠️ Auto-update : {e}")
+
+    # 3. Tuer les apps de fond qui consomment de la data sans être utiles
+    _background_apps = [
+        "com.android.vending",          # Play Store (mises à jour)
+        "com.android.chrome",           # Chrome
+        "com.google.android.youtube",   # YouTube
+        "com.google.android.apps.maps", # Maps
+        "com.google.android.videos",    # Google TV/Films
+        "com.google.android.music",     # Google Music
+        "com.google.android.apps.photos", # Google Photos
+    ]
+    killed = []
+    for pkg in _background_apps:
+        try:
+            adb(device, f"shell am force-stop {pkg}")
+            killed.append(pkg.split(".")[-1])
+        except Exception:
+            pass
+    if killed:
+        print(f"  ✅ Apps de fond stoppées : {', '.join(killed)}")
+
+
 SIM_AGGREGATOR_API_KEY  = ""
 SIM_AGGREGATOR_URL      = "https://api.sim-aggregator.com/stubs/handler_api.php"
 SIM_AGGREGATOR_COUNTRY  = ""
@@ -4620,8 +4663,17 @@ def insta_step_create_password(device, password="Alexis06"):
         print(f"  ✅ Mot de passe saisi : {password}")
         time.sleep(0.5)
 
-        # ── Cliquer Next ──────────────────────────────────────────────────────
+        # ── Cliquer Next + vérification (retry si l'écran ne change pas) ─────
+        _pw_kw = ["create password", "create a password"]
         insta_step_next(device)
+        for _pw_retry in range(4):
+            time.sleep(2)
+            _pw_xml = safe_ui_dump(device, f"/sdcard/ui_pw_verify_{_pw_retry}.xml")
+            if not any(kw in _pw_xml.lower() for kw in _pw_kw):
+                print(f"  ✅ Écran password quitté")
+                break
+            print(f"  ⚠️ Toujours sur password ({_pw_retry+1}/4) — re-tap Next...")
+            insta_step_next(device)
         return True
 
     print(f"  ❌ Écran 'Create password' jamais apparu")
@@ -5300,68 +5352,72 @@ def insta_step_birthday(device):
     # ── ANNÉE ────────────────────────────────────────────────────────────────
     if len(cols) >= 3:
         cx, cy, ch = col_center(cols[2])
-        if ANDROID_VERSION == "Android 13":
-            birth_year = str(random.randint(1995, 2005))
-            print(f"  📅 Année cible : {birth_year} — Android 13 : log DOM + interaction...")
+        birth_year = random.randint(1995, 2005)
+        print(f"  📅 Année cible : {birth_year} — swipe colonne année...")
 
-            # DOM avant toute interaction
-            adb(device, "shell uiautomator dump /sdcard/ui_year_before.xml")
-            time.sleep(0.3)
-            _xml_year_before = adb(device, "shell cat /sdcard/ui_year_before.xml").stdout
-            print(f"  [DEBUG YEAR BEFORE] {_xml_year_before}")
+        # Lire l'année actuellement affichée dans le picker depuis le XML déjà dumpé
+        current_year = None
+        for yt in re.findall(r'text="(\d{4})"', xml_picker):
+            yr = int(yt)
+            if 1985 <= yr <= 2030:
+                current_year = yr
+                break
+        if current_year is None:
+            # Instagram affiche par défaut l'année courante - 13 (âge minimum légal)
+            current_year = time.localtime().tm_year - 13
+        print(f"  📅 Année courante dans le picker : {current_year}")
 
-            # Premier tap
-            adb(device, f"shell input tap {cx} {cy}")
-            time.sleep(0.5)
-            adb(device, "shell uiautomator dump /sdcard/ui_year_tap1.xml")
-            time.sleep(0.3)
-            _xml_year_tap1 = adb(device, "shell cat /sdcard/ui_year_tap1.xml").stdout
-            print(f"  [DEBUG YEAR TAP1] {_xml_year_tap1}")
+        y1_col = int(cols[2][1])
+        y2_col = int(cols[2][3])
+        col_h  = y2_col - y1_col
+        # Le picker date affiche typiquement 3 items visibles → item_h = col_h // 3
+        item_h = max(col_h // 3, 60)
 
-            # Deuxième tap
-            adb(device, f"shell input tap {cx} {cy}")
-            time.sleep(0.5)
-            adb(device, "shell uiautomator dump /sdcard/ui_year_tap2.xml")
-            time.sleep(0.3)
-            _xml_year_tap2 = adb(device, "shell cat /sdcard/ui_year_tap2.xml").stdout
-            print(f"  [DEBUG YEAR TAP2] {_xml_year_tap2}")
+        def _picker_year(xml_str):
+            for yt in re.findall(r'text="(\d{4})"', xml_str):
+                yr = int(yt)
+                if 1985 <= yr <= 2030:
+                    return yr
+            return None
 
-            # Effacer + saisir
-            adb(device, "shell input keyevent KEYCODE_CTRL_A")
-            time.sleep(0.2)
-            for _ in range(6):
-                adb(device, "shell input keyevent KEYCODE_DEL")
-                time.sleep(0.05)
-            adb(device, f"shell input text '{birth_year}'")
-            print(f"  ✅ Année '{birth_year}' saisie")
-            time.sleep(0.3)
+        current_year = _picker_year(xml_picker)
+        if current_year is None:
+            current_year = time.localtime().tm_year - 13
+        print(f"  📅 Année initiale : {current_year}, cible : {birth_year}")
 
-            # ENTER pour confirmer
-            adb(device, "shell input keyevent KEYCODE_ENTER")
-            time.sleep(0.5)
+        # Boucle itérative : swipe → re-lire → ajuster (auto-correctif)
+        prev_year = None
+        for _it in range(30):
+            diff = current_year - birth_year
+            if diff == 0:
+                break
+            # Couvrir abs(diff) items mais borné par la hauteur de la colonne
+            swipe_px = max(item_h, min(abs(diff) * item_h, col_h - 20))
+            if diff > 0:   # besoin d'années PLUS ANCIENNES → doigt descend (y augmente)
+                y_s = max(y1_col + 10, cy - swipe_px // 2)
+                y_e = min(y2_col - 10, cy + swipe_px // 2)
+            else:           # besoin d'années PLUS RÉCENTES → doigt monte (y diminue)
+                y_s = min(y2_col - 10, cy + swipe_px // 2)
+                y_e = max(y1_col + 10, cy - swipe_px // 2)
+            adb(device, f"shell input swipe {cx} {y_s} {cx} {y_e} {max(150, swipe_px)}")
+            time.sleep(0.3)
+            xml_r = safe_ui_dump(device, f"/sdcard/ui_yr_{_it}.xml", settle=0.3)
+            new_year = _picker_year(xml_r)
+            if new_year is not None:
+                print(f"  🔄 [{_it+1}] {current_year} → {new_year} (cible: {birth_year})")
+                if new_year == current_year == prev_year:
+                    # Picker bloqué 2 fois de suite → swipe pleine hauteur pour débloquer
+                    print(f"  ⚠️ Picker bloqué — swipe forcé pleine hauteur...")
+                    if diff > 0:
+                        adb(device, f"shell input swipe {cx} {y1_col + 10} {cx} {y2_col - 10} 500")
+                    else:
+                        adb(device, f"shell input swipe {cx} {y2_col - 10} {cx} {y1_col + 10} 500")
+                    time.sleep(0.6)
+                prev_year = current_year
+                current_year = new_year
 
-            # DOM après ENTER
-            adb(device, "shell uiautomator dump /sdcard/ui_year_after_enter.xml")
-            time.sleep(0.3)
-            _xml_year_enter = adb(device, "shell cat /sdcard/ui_year_after_enter.xml").stdout
-            print(f"  [DEBUG YEAR AFTER ENTER] {_xml_year_enter}")
-        else:
-            birth_year = str(random.randint(1995, 2005))
-            print(f"  📅 Année cible : {birth_year} — double-tap colonne année...")
-            adb(device, f"shell input tap {cx} {cy}")
-            time.sleep(0.3)
-            adb(device, f"shell input tap {cx} {cy}")
-            time.sleep(0.5)
-            adb(device, "shell input keyevent KEYCODE_CTRL_A")
-            time.sleep(0.2)
-            for _ in range(6):
-                adb(device, "shell input keyevent KEYCODE_DEL")
-                time.sleep(0.05)
-            adb(device, f"shell input text '{birth_year}'")
-            print(f"  ✅ Année '{birth_year}' saisie")
-            time.sleep(0.5)
-            adb(device, "shell input keyevent KEYCODE_BACK")
-            time.sleep(0.5)
+        time.sleep(0.4)
+        print(f"  ✅ Année '{birth_year}' positionnée (réelle: {current_year})")
 
     # ── Cliquer Set puis Next ────────────────────────────────────────────────
     time.sleep(0.5)
@@ -5400,25 +5456,44 @@ def insta_step_birthday(device):
         adb(device, f"shell input tap {int(w*0.50)} {int(h*0.88)}")
         time.sleep(1.5)
 
-    # ── Next après Set (jusqu'à 4 essais avec re-dump fiable) ───────────────
-    next_found = False
+    # ── Next après Set — clic initial ───────────────────────────────────────
+    def _click_next_bday(try_idx):
+        xml_n = safe_ui_dump(device, f"/sdcard/ui_insta_bday_next2_{try_idx}.xml")
+        c2, lbl2 = _find_bday_btn(xml_n, ["Next", "NEXT"])
+        if c2:
+            x1, y1, x2, y2 = map(int, c2)
+            cx_b, cy_b = (x1+x2)//2, (y1+y2)//2
+            adb(device, f"shell input tap {cx_b} {cy_b}")
+            print(f"  ✅ 'Next' cliqué ({cx_b},{cy_b})")
+            return True
+        return False
+
+    next_clicked = False
     for _next_try in range(4):
-        xml_next2 = safe_ui_dump(device, f"/sdcard/ui_insta_bday_next2_{_next_try}.xml")
-        coords2, found_lbl2 = _find_bday_btn(xml_next2, ["Next", "NEXT"])
-        if coords2:
-            x1, y1, x2, y2 = map(int, coords2)
-            cx_btn, cy_btn = (x1+x2)//2, (y1+y2)//2
-            adb(device, f"shell input tap {cx_btn} {cy_btn}")
-            print(f"  ✅ '{found_lbl2}' cliqué ({cx_btn},{cy_btn})")
-            next_found = True
-            time.sleep(1.5)
+        if _click_next_bday(_next_try):
+            next_clicked = True
             break
         time.sleep(0.5)
 
-    if not next_found:
+    if not next_clicked:
         print(f"  ⚠️ 'Next' non trouvé — fallback bas-centre")
         adb(device, f"shell input tap {int(w*0.50)} {int(h*0.88)}")
-        time.sleep(1.5)
+
+    # ── Vérifier qu'on a bien quitté l'écran birthday (retry Next si bloqué) ─
+    _bday_kw = ["date of birth", "birthday", "what's your birthday", "numberpicker"]
+    for _verify in range(4):
+        time.sleep(2)
+        xml_verify = safe_ui_dump(device, f"/sdcard/ui_bday_verify_{_verify}.xml")
+        if not any(kw in xml_verify.lower() for kw in _bday_kw):
+            print(f"  ✅ Sortie de l'écran birthday confirmée")
+            break
+        print(f"  ⚠️ Toujours sur birthday ({_verify+1}/4) — re-tap 'Next'...")
+        c_r, _ = _find_bday_btn(xml_verify, ["Next", "NEXT"])
+        if c_r:
+            x1, y1, x2, y2 = map(int, c_r)
+            adb(device, f"shell input tap {(x1+x2)//2} {(y1+y2)//2}")
+        else:
+            adb(device, f"shell input tap {int(w*0.50)} {int(h*0.88)}")
 
     print(f"  ✅ Birthday terminé")
     return True
@@ -6225,7 +6300,8 @@ def insta_step_name_and_flow(device, phone_id=None):
 
 def post_story_on_device(phone_id: str, media_path: str,
                          add_to_highlight: bool = False,
-                         highlight_name: str = "tuto 1") -> bool:
+                         highlight_name: str = "tuto 1",
+                         story_link: str = "") -> bool:
     """
     Lance le téléphone, ouvre Instagram, clique sur 'Your story',
     sélectionne le média et publie la story.
@@ -6584,22 +6660,54 @@ def post_story_on_device(phone_id: str, media_path: str,
         ])
 
         if _has_dialog:
-            print(f"  🔔 Dialog popup détecté [{_popup_round+1}/3] — tap haut écran...")
-            _res_p = adb(device, "shell wm size")
-            _mp = re.search(r'(\d+)x(\d+)', _res_p.stdout)
-            if _mp:
-                _wp, _hp = int(_mp.group(1)), int(_mp.group(2))
-                adb(device, f"shell input tap {_wp // 2} {int(_hp * 0.08)}")
-                print(f"  ✅ Tap haut écran ({_wp // 2},{int(_hp * 0.08)})")
-                time.sleep(1.5)
+            print(f"  🔔 Dialog popup détecté [{_popup_round+1}/3] — tap bouton OK/fermeture...")
+            # Chercher et cliquer directement OK / fermeture dans le XML
+            _dialog_btn_clicked = False
+            for _dbt in ["OK", "Ok", "Not Now", "Not now", "Got it", "Continue",
+                         "Pas maintenant", "Fermer", "Close"]:
+                for _dbp in [
+                    rf'text="{re.escape(_dbt)}"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"',
+                    rf'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"[^>]*text="{re.escape(_dbt)}"',
+                    rf'content-desc="{re.escape(_dbt)}"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"',
+                    rf'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"[^>]*content-desc="{re.escape(_dbt)}"',
+                ]:
+                    _dbm = re.findall(_dbp, xml_ok)
+                    if _dbm:
+                        _x1, _y1, _x2, _y2 = map(int, _dbm[0])
+                        _cx, _cy = (_x1+_x2)//2, (_y1+_y2)//2
+                        print(f"  ✅ Dialog: bouton '{_dbt}' ({_cx},{_cy}) — tap")
+                        adb(device, f"shell input tap {_cx} {_cy}")
+                        _dialog_btn_clicked = True
+                        _popup_found = True
+                        time.sleep(2.0)
+                        break
+                if _dialog_btn_clicked:
+                    break
 
-            # Vérifier si le dialog est fermé
-            adb(device, "shell uiautomator dump /sdcard/ui_dialog_verify.xml")
-            time.sleep(0.4)
-            xml_dv = adb(device, "shell cat /sdcard/ui_dialog_verify.xml").stdout
-            if "dialog_container" not in xml_dv and "igds_promo_dialog" not in xml_dv:
-                print(f"  ✅ Dialog fermé")
+            if not _dialog_btn_clicked:
+                # Fallback : tap haut de l'écran pour fermer
+                _res_p = adb(device, "shell wm size")
+                _mp = re.search(r'(\d+)x(\d+)', _res_p.stdout)
+                if _mp:
+                    _wp, _hp = int(_mp.group(1)), int(_mp.group(2))
+                    adb(device, f"shell input tap {_wp // 2} {int(_hp * 0.08)}")
+                    print(f"  🎯 Dialog: fallback tap haut écran ({_wp // 2},{int(_hp * 0.08)})")
+                    time.sleep(1.5)
                 _popup_found = True
+
+            # Vérifier fermeture par les keywords réels du dialog
+            adb(device, "shell uiautomator dump /sdcard/ui_dialog_verify.xml")
+            time.sleep(0.5)
+            xml_dv = adb(device, "shell cat /sdcard/ui_dialog_verify.xml").stdout
+            _dialog_still_open = any(kw in xml_dv for kw in [
+                "dialog_container", "igds_promo_dialog",
+                "story sharing", "story-to-story", "Introducing",
+            ])
+            if _dialog_still_open:
+                print(f"  ⚠️ Dialog encore présent — sera re-vérifié au prochain tour")
+                _popup_found = False  # Forcer une nouvelle tentative
+            else:
+                print(f"  ✅ Dialog fermé")
 
         # ── Chercher bouton "Decline optional cookies" / "Decline" ───────────────
         for _dcl in ["Decline optional cookies", "Decline Optional Cookies", "Decline"]:
@@ -6745,6 +6853,387 @@ def post_story_on_device(phone_id: str, media_path: str,
 
     if not _feed_ok:
         print(f"  ⚠️ Feed jamais chargé après 3 tentatives — on continue quand même")
+
+    # ── 8d. Ajouter un sticker LIEN à la story (si activé) ──────────────────
+    if story_link:
+        print(f"  🔗 [LIEN STORY] Début ajout sticker lien : {story_link[:80]}")
+        import re as _re_lnk
+
+        # Dump l'éditeur story pour debug
+        adb(device, "shell uiautomator dump /sdcard/ui_story_editor_lnk.xml")
+        time.sleep(0.5)
+        xml_editor = adb(device, "shell cat /sdcard/ui_story_editor_lnk.xml").stdout
+        all_texts_ed = _re_lnk.findall(r'text="([^"]+)"', xml_editor)
+        all_descs_ed = _re_lnk.findall(r'content-desc="([^"]+)"', xml_editor)
+        all_rids_ed  = _re_lnk.findall(r'resource-id="([^"]+)"', xml_editor)
+        print(f"  📋 [LIEN] Éditeur textes : {[t for t in all_texts_ed if t.strip()][:25]}")
+        print(f"  📋 [LIEN] Éditeur descs  : {[d for d in all_descs_ed if d.strip()][:25]}")
+        print(f"  📋 [LIEN] Éditeur ids    : {[r for r in all_rids_ed if 'instagram' in r][:20]}")
+
+        # ── Étape 1 : taper l'icône sticker ─────────────────────────────────
+        # Attendre que l'éditeur story soit complètement chargé (boucle)
+        print(f"  🎯 [LIEN] Étape 1 — Attente éditeur story chargé...")
+        for _wait_ed in range(6):
+            adb(device, "shell uiautomator dump /sdcard/ui_story_editor_lnk.xml")
+            time.sleep(0.5)
+            xml_editor = adb(device, "shell cat /sdcard/ui_story_editor_lnk.xml").stdout
+            _clickables_ed = _re_lnk.findall(
+                r'clickable="true"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', xml_editor)
+            if not _clickables_ed:
+                _clickables_ed = _re_lnk.findall(
+                    r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"[^>]*clickable="true"', xml_editor)
+            all_texts_ed = _re_lnk.findall(r'text="([^"]+)"', xml_editor)
+            all_descs_ed = _re_lnk.findall(r'content-desc="([^"]+)"', xml_editor)
+            all_rids_ed  = _re_lnk.findall(r'resource-id="([^"]+)"', xml_editor)
+            print(f"  📋 [LIEN] Éditeur textes : {[t for t in all_texts_ed if t.strip()][:25]}")
+            print(f"  📋 [LIEN] Éditeur descs  : {[d for d in all_descs_ed if d.strip()][:25]}")
+            print(f"  📋 [LIEN] Éditeur ids    : {[r for r in all_rids_ed if 'instagram' in r][:20]}")
+            print(f"  📋 [LIEN] Cliquables ({len(_clickables_ed)}) :")
+            for _ce in _clickables_ed[:20]:
+                _x1c, _y1c, _x2c, _y2c = map(int, _ce)
+                print(f"    ({(_x1c+_x2c)//2:4d},{(_y1c+_y2c)//2:4d}) {_x2c-_x1c}x{_y2c-_y1c}")
+            if len(_clickables_ed) >= 3:
+                print(f"  ✅ [LIEN] Éditeur chargé ({_wait_ed+1}/6) — {len(_clickables_ed)} cliquables")
+                break
+            print(f"  ⏳ [LIEN] Éditeur pas encore chargé ({_wait_ed+1}/6)...")
+            time.sleep(1)
+
+        sticker_btn_clicked = False
+        _rs = adb(device, "shell wm size")
+        _ms = re.search(r'(\d+)x(\d+)', _rs.stdout)
+        _ws, _hs = (int(_ms.group(1)), int(_ms.group(2))) if _ms else (1080, 2340)
+
+        # Stratégie 1 : content-desc connus
+        for desc in ["Sticker", "Add sticker", "Stickers", "Add a sticker", "Add sticker button",
+                     "Sticker tray", "stickerTray"]:
+            for pat in [
+                rf'content-desc="{re.escape(desc)}"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"',
+                rf'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"[^>]*content-desc="{re.escape(desc)}"',
+            ]:
+                m = _re_lnk.findall(pat, xml_editor)
+                if m:
+                    x1, y1, x2, y2 = map(int, m[0])
+                    cx, cy = (x1+x2)//2, (y1+y2)//2
+                    print(f"  ✅ [LIEN] Sticker desc '{desc}' ({cx},{cy}) — tap")
+                    adb(device, f"shell input tap {cx} {cy}")
+                    sticker_btn_clicked = True
+                    break
+            if sticker_btn_clicked:
+                break
+
+        # Stratégie 2 : resource-id connus
+        if not sticker_btn_clicked:
+            for rid in [
+                "com.instagram.android:id/story_camera_sticker_button",
+                "com.instagram.android:id/sticker_picker_button",
+                "com.instagram.android:id/toolbar_sticker_item",
+                "com.instagram.android:id/sticker_tray_button",
+                "com.instagram.android:id/camera_sticker_button",
+            ]:
+                for pat in [
+                    rf'resource-id="{re.escape(rid)}"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"',
+                    rf'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"[^>]*resource-id="{re.escape(rid)}"',
+                ]:
+                    m = _re_lnk.findall(pat, xml_editor)
+                    if m:
+                        x1, y1, x2, y2 = map(int, m[0])
+                        cx, cy = (x1+x2)//2, (y1+y2)//2
+                        print(f"  ✅ [LIEN] Sticker rid '{rid}' ({cx},{cy}) — tap")
+                        adb(device, f"shell input tap {cx} {cy}")
+                        sticker_btn_clicked = True
+                        break
+                if sticker_btn_clicked:
+                    break
+
+        # Stratégie 3 : trouver le bouton "Aa" (texte) et prendre le suivant juste en dessous
+        if not sticker_btn_clicked:
+            _aa_y = None
+            _aa_x = None
+            for _aa_desc in ["Text", "Add text", "Aa", "Text sticker"]:
+                for _aa_pat in [
+                    rf'content-desc="{re.escape(_aa_desc)}"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"',
+                    rf'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"[^>]*content-desc="{re.escape(_aa_desc)}"',
+                    rf'text="{re.escape(_aa_desc)}"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"',
+                    rf'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"[^>]*text="{re.escape(_aa_desc)}"',
+                ]:
+                    _aa_m = _re_lnk.findall(_aa_pat, xml_editor)
+                    if _aa_m:
+                        _x1a, _y1a, _x2a, _y2a = map(int, _aa_m[0])
+                        _aa_x = (_x1a+_x2a)//2
+                        _aa_y = (_y1a+_y2a)//2
+                        _btn_h = _y2a - _y1a
+                        _stk_y = _aa_y + _btn_h + (_btn_h // 2)
+                        print(f"  🎯 [LIEN] Aa trouvé ({_aa_x},{_aa_y}) → sticker estimé ({_aa_x},{_stk_y})")
+                        adb(device, f"shell input tap {_aa_x} {_stk_y}")
+                        sticker_btn_clicked = True
+                        break
+                if sticker_btn_clicked:
+                    break
+
+        # Stratégie 4 : 2ème bouton cliquable sur la droite (x > 75%), trié par y
+        if not sticker_btn_clicked:
+            _right_btns = []
+            for _ce in _clickables_ed:
+                _x1c, _y1c, _x2c, _y2c = map(int, _ce)
+                _cxc, _cyc = (_x1c+_x2c)//2, (_y1c+_y2c)//2
+                if _cxc > _ws * 0.75 and _cyc < _hs * 0.40:
+                    _right_btns.append((_cxc, _cyc))
+            _right_btns.sort(key=lambda b: b[1])
+            print(f"  📋 [LIEN] Boutons droite haut ({len(_right_btns)}) : {_right_btns[:8]}")
+            if len(_right_btns) >= 2:
+                _scx, _scy = _right_btns[1]  # 2ème bouton (après Aa)
+                print(f"  🎯 [LIEN] Sticker = 2ème bouton droite ({_scx},{_scy}) — tap")
+                adb(device, f"shell input tap {_scx} {_scy}")
+                sticker_btn_clicked = True
+            elif len(_right_btns) == 1:
+                _scx, _scy = _right_btns[0]
+                print(f"  🎯 [LIEN] Sticker = seul bouton droite ({_scx},{_scy}) — tap")
+                adb(device, f"shell input tap {_scx} {_scy}")
+                sticker_btn_clicked = True
+
+        # Stratégie 5 : coordonnées fixes (~92% x, ~16% y) avec 3 tentatives sur y différents
+        if not sticker_btn_clicked:
+            _try_coords = [
+                (int(_ws * 0.92), int(_hs * 0.165)),
+                (int(_ws * 0.87), int(_hs * 0.19)),
+                (int(_ws * 0.92), int(_hs * 0.14)),
+            ]
+            _scx, _scy = _try_coords[0]
+            print(f"  🎯 [LIEN] Fallback sticker coordonnées fixes ({_scx},{_scy})")
+            adb(device, f"shell input tap {_scx} {_scy}")
+            sticker_btn_clicked = True
+
+        time.sleep(2.5)
+
+        # ── Étape 2 : attendre la feuille sticker et cliquer LINK ─────────────
+        # Si pas de feuille sticker après le premier tap, retry avec les coords suivantes
+        _sticker_retry_coords = [
+            (int(_ws * 0.87), int(_hs * 0.19)),
+            (int(_ws * 0.92), int(_hs * 0.14)),
+            (int(_ws * 0.92), int(_hs * 0.21)),
+        ]
+        _sticker_retry_idx = 0
+
+        print(f"  🔍 [LIEN] Étape 2 — Recherche bouton LINK dans la feuille sticker...")
+        link_btn_clicked = False
+        for tick in range(12):
+            adb(device, "shell uiautomator dump /sdcard/ui_sticker_sheet.xml")
+            time.sleep(0.5)
+            xml_sheet = adb(device, "shell cat /sdcard/ui_sticker_sheet.xml").stdout
+            all_texts_sh = _re_lnk.findall(r'text="([^"]+)"', xml_sheet)
+            all_descs_sh = _re_lnk.findall(r'content-desc="([^"]+)"', xml_sheet)
+            print(f"  📋 [LIEN] Sticker sheet textes [{tick+1}] : {[t for t in all_texts_sh if t.strip()][:40]}")
+            print(f"  📋 [LIEN] Sticker sheet descs  [{tick+1}] : {[d for d in all_descs_sh if d.strip()][:40]}")
+
+            # Détecter si la feuille sticker est ouverte (contient des stickers connus)
+            _sheet_kw = ["LOCATION", "MENTION", "MUSIC", "PHOTO", "GIF", "LINK", "Link",
+                         "HASHTAG", "COUNTDOWN", "POLL", "QUESTIONS", "FRAMES", "CUTOUTS"]
+            _sheet_open = any(kw in xml_sheet for kw in _sheet_kw)
+
+            # Si la feuille n'est pas ouverte et qu'on a encore des coordonnées à essayer, retapper
+            if not _sheet_open and tick > 1 and _sticker_retry_idx < len(_sticker_retry_coords):
+                _rx, _ry = _sticker_retry_coords[_sticker_retry_idx]
+                _sticker_retry_idx += 1
+                print(f"  🔄 [LIEN] Feuille sticker pas ouverte — retry tap ({_rx},{_ry})")
+                adb(device, f"shell input tap {_rx} {_ry}")
+                time.sleep(2)
+                continue
+
+            for text in ["Link Sticker", "LINK", "Link", "link", "Lien"]:
+                for pat in [
+                    rf'text="{re.escape(text)}"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"',
+                    rf'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"[^>]*text="{re.escape(text)}"',
+                    rf'content-desc="{re.escape(text)}"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"',
+                    rf'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"[^>]*content-desc="{re.escape(text)}"',
+                ]:
+                    m = _re_lnk.findall(pat, xml_sheet)
+                    if m:
+                        x1, y1, x2, y2 = map(int, m[0])
+                        cx, cy = (x1+x2)//2, (y1+y2)//2
+                        print(f"  ✅ [LIEN] Bouton LINK trouvé ({cx},{cy}) — tap")
+                        adb(device, f"shell input tap {cx} {cy}")
+                        link_btn_clicked = True
+                        break
+                if link_btn_clicked:
+                    break
+
+            if link_btn_clicked:
+                break
+            print(f"  ⏳ [LIEN] LINK pas encore visible ({tick+1}/12)...")
+            time.sleep(1)
+
+        if not link_btn_clicked:
+            print(f"  ❌ [LIEN] Bouton LINK non trouvé — Retour pour fermer feuille, on continue sans lien")
+            adb(device, "shell input keyevent 4")
+            time.sleep(1)
+        else:
+            time.sleep(2)
+
+            # ── Étape 3 : saisir l'URL dans le champ "Add link" ─────────────────
+            print(f"  🔍 [LIEN] Étape 3 — Saisie URL dans champ Add link...")
+            adb(device, "shell uiautomator dump /sdcard/ui_add_link.xml")
+            time.sleep(0.5)
+            xml_addlnk = adb(device, "shell cat /sdcard/ui_add_link.xml").stdout
+            all_texts_al = _re_lnk.findall(r'text="([^"]+)"', xml_addlnk)
+            all_descs_al = _re_lnk.findall(r'content-desc="([^"]+)"', xml_addlnk)
+            all_rids_al  = _re_lnk.findall(r'resource-id="([^"]+)"', xml_addlnk)
+            print(f"  📋 [LIEN] Add link textes : {[t for t in all_texts_al if t.strip()][:20]}")
+            print(f"  📋 [LIEN] Add link descs  : {[d for d in all_descs_al if d.strip()][:20]}")
+            print(f"  📋 [LIEN] Add link ids    : {[r for r in all_rids_al if 'instagram' in r][:20]}")
+
+            url_field_clicked = False
+            # Chercher champ URL par placeholder ou hint
+            for hint_txt in ["http://example.com", "URL", "Enter URL", "Lien", "Add link"]:
+                for pat in [
+                    rf'text="{re.escape(hint_txt)}"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"',
+                    rf'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"[^>]*text="{re.escape(hint_txt)}"',
+                    rf'hint="{re.escape(hint_txt)}"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"',
+                    rf'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"[^>]*hint="{re.escape(hint_txt)}"',
+                ]:
+                    m = _re_lnk.findall(pat, xml_addlnk)
+                    if m:
+                        x1, y1, x2, y2 = map(int, m[0])
+                        cx, cy = (x1+x2)//2, (y1+y2)//2
+                        print(f"  ✅ [LIEN] Champ URL via '{hint_txt}' ({cx},{cy}) — tap")
+                        adb(device, f"shell input tap {cx} {cy}")
+                        time.sleep(0.5)
+                        url_field_clicked = True
+                        break
+                if url_field_clicked:
+                    break
+
+            # Chercher par resource-id
+            if not url_field_clicked:
+                for rid in [
+                    "com.instagram.android:id/url_input",
+                    "com.instagram.android:id/link_url_input",
+                    "com.instagram.android:id/story_link_url",
+                    "com.instagram.android:id/link_input",
+                ]:
+                    for pat in [
+                        rf'resource-id="{re.escape(rid)}"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"',
+                        rf'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"[^>]*resource-id="{re.escape(rid)}"',
+                    ]:
+                        m = _re_lnk.findall(pat, xml_addlnk)
+                        if m:
+                            x1, y1, x2, y2 = map(int, m[0])
+                            cx, cy = (x1+x2)//2, (y1+y2)//2
+                            print(f"  ✅ [LIEN] Champ URL rid '{rid}' ({cx},{cy}) — tap")
+                            adb(device, f"shell input tap {cx} {cy}")
+                            time.sleep(0.5)
+                            url_field_clicked = True
+                            break
+                    if url_field_clicked:
+                        break
+
+            # Fallback : premier EditText de la page Add link
+            if not url_field_clicked:
+                edits_al = _re_lnk.findall(
+                    r'class="android\.widget\.EditText"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"',
+                    xml_addlnk)
+                if edits_al:
+                    x1, y1, x2, y2 = map(int, edits_al[0])
+                    cx, cy = (x1+x2)//2, (y1+y2)//2
+                    print(f"  🎯 [LIEN] Fallback premier EditText ({cx},{cy}) — tap")
+                    adb(device, f"shell input tap {cx} {cy}")
+                    time.sleep(0.5)
+                    url_field_clicked = True
+                else:
+                    _ral = adb(device, "shell wm size")
+                    _mal = re.search(r'(\d+)x(\d+)', _ral.stdout)
+                    _wal, _hal = (int(_mal.group(1)), int(_mal.group(2))) if _mal else (1080, 2340)
+                    print(f"  🎯 [LIEN] Fallback coordonnées URL ({_wal//2},{int(_hal*0.38)})")
+                    adb(device, f"shell input tap {_wal//2} {int(_hal*0.38)}")
+                    time.sleep(0.5)
+                    url_field_clicked = True
+
+            # Sélectionner tout et saisir le lien
+            adb(device, "shell input keyevent KEYCODE_CTRL_A")
+            time.sleep(0.2)
+            adb(device, "shell input keyevent KEYCODE_DEL")
+            time.sleep(0.2)
+            _url_safe = story_link.replace("'", "").replace(" ", "%20")
+            adb(device, f"shell input text '{_url_safe}'")
+            print(f"  ✅ [LIEN] URL saisie : {story_link[:80]}")
+            time.sleep(1)
+
+            # ── Étape 4 : tapper "Customize sticker text" pour développer ───────
+            print(f"  🔍 [LIEN] Étape 4 — Recherche 'Customize sticker text'...")
+            adb(device, "shell uiautomator dump /sdcard/ui_customize_sticker.xml")
+            time.sleep(0.5)
+            xml_cust = adb(device, "shell cat /sdcard/ui_customize_sticker.xml").stdout
+            all_texts_cust = _re_lnk.findall(r'text="([^"]+)"', xml_cust)
+            print(f"  📋 [LIEN] Customize screen textes : {[t for t in all_texts_cust if t.strip()][:20]}")
+            cust_clicked = False
+            for cust_txt in ["Customize sticker text", "Sticker text", "Customize"]:
+                for pat in [
+                    rf'text="{re.escape(cust_txt)}"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"',
+                    rf'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"[^>]*text="{re.escape(cust_txt)}"',
+                    rf'content-desc="{re.escape(cust_txt)}"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"',
+                    rf'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"[^>]*content-desc="{re.escape(cust_txt)}"',
+                ]:
+                    m = _re_lnk.findall(pat, xml_cust)
+                    if m:
+                        x1, y1, x2, y2 = map(int, m[0])
+                        cx, cy = (x1+x2)//2, (y1+y2)//2
+                        print(f"  ✅ [LIEN] '{cust_txt}' trouvé ({cx},{cy}) — tap")
+                        adb(device, f"shell input tap {cx} {cy}")
+                        cust_clicked = True
+                        time.sleep(0.8)
+                        break
+                if cust_clicked:
+                    break
+            if not cust_clicked:
+                print(f"  ℹ️ [LIEN] 'Customize sticker text' non trouvé — on passe directement à Done")
+
+            # ── Étape 5 : tapper "Done" ──────────────────────────────────────────
+            print(f"  🔍 [LIEN] Étape 5 — Recherche bouton Done...")
+            done_lnk_clicked = False
+            for tick in range(8):
+                adb(device, "shell uiautomator dump /sdcard/ui_link_done.xml")
+                time.sleep(0.5)
+                xml_done = adb(device, "shell cat /sdcard/ui_link_done.xml").stdout
+                all_texts_done = _re_lnk.findall(r'text="([^"]+)"', xml_done)
+                all_descs_done = _re_lnk.findall(r'content-desc="([^"]+)"', xml_done)
+                print(f"  📋 [LIEN] Done screen textes : {[t for t in all_texts_done if t.strip()][:20]}")
+                print(f"  📋 [LIEN] Done screen descs  : {[d for d in all_descs_done if d.strip()][:20]}")
+
+                for done_txt in ["Done", "DONE"]:
+                    for pat in [
+                        rf'text="{re.escape(done_txt)}"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"',
+                        rf'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"[^>]*text="{re.escape(done_txt)}"',
+                        rf'content-desc="{re.escape(done_txt)}"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"',
+                        rf'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"[^>]*content-desc="{re.escape(done_txt)}"',
+                    ]:
+                        m = _re_lnk.findall(pat, xml_done)
+                        if m:
+                            x1, y1, x2, y2 = map(int, m[0])
+                            cx, cy = (x1+x2)//2, (y1+y2)//2
+                            print(f"  ✅ [LIEN] Bouton Done ({cx},{cy}) — tap")
+                            adb(device, f"shell input tap {cx} {cy}")
+                            done_lnk_clicked = True
+                            break
+                    if done_lnk_clicked:
+                        break
+
+                if done_lnk_clicked:
+                    break
+                print(f"  ⏳ [LIEN] Done pas encore visible ({tick+1}/8)...")
+                time.sleep(1)
+
+            if not done_lnk_clicked:
+                # Fallback : coordonnées fixes bouton Done (haut droite)
+                _rd = adb(device, "shell wm size")
+                _md = re.search(r'(\d+)x(\d+)', _rd.stdout)
+                _wd, _hd = (int(_md.group(1)), int(_md.group(2))) if _md else (1080, 2340)
+                _dfy = int(_hd * 0.115)
+                _dfx = int(_wd * 0.85)
+                print(f"  🎯 [LIEN] Fallback Done coordonnées fixes ({_dfx},{_dfy})")
+                adb(device, f"shell input tap {_dfx} {_dfy}")
+                done_lnk_clicked = True
+
+            time.sleep(2)
+            print(f"  ✅ [LIEN] Sticker lien ajouté à la story !")
 
 # ── 9. Cliquer sur "Your story" pour publier ──────────────────────────────
     print(f"  🔍 Recherche bouton 'Your story' pour publier...")
@@ -7260,8 +7749,9 @@ def _add_profile_picture_from_gallery(device):
 
 def open_instagram(device, photo_folder, city=None, lat=None, lon=None,
                 phone_id=None, pwd=None, bio="", ban_on_existing_email=False):
-   
 
+    # ── Réduction data (apps de fond, Data Saver) ─────────────────────────
+    _reduce_data_creation(device)
 
     # ── ÉTAPE 0 : Après push photos, ouvrir Instagram ──────────────────────
     # ── Push photo de profil (avec vérification réelle sur le téléphone) ───
@@ -7773,12 +8263,30 @@ def open_instagram(device, photo_folder, city=None, lat=None, lon=None,
                 _handled.add("birthday")
                 time.sleep(2)
                 continue
-            # Si birthday déjà géré mais écran encore présent → re-tap bas-centre
+            # Si birthday déjà géré mais écran encore présent → cherche Next, sinon bas-centre
             if _on_birthday and "birthday" in _handled:
-                print("  🎂 [Dispatcher] Birthday bloqué — re-tap bas-centre...")
-                _bday_w = int(re.search(r'(\d+)x\d+', adb(device, "shell wm size").stdout).group(1)) if re.search(r'(\d+)x\d+', adb(device, "shell wm size").stdout) else 1080
-                _bday_h = int(re.search(r'\d+x(\d+)', adb(device, "shell wm size").stdout).group(1)) if re.search(r'\d+x(\d+)', adb(device, "shell wm size").stdout) else 2340
-                adb(device, f"shell input tap {_bday_w//2} {int(_bday_h*0.88)}")
+                print("  🎂 [Dispatcher] Birthday bloqué — re-cherche 'Next'...")
+                _sz = adb(device, "shell wm size").stdout
+                _bday_w = int(re.search(r'(\d+)x\d+', _sz).group(1)) if re.search(r'(\d+)x\d+', _sz) else 1080
+                _bday_h = int(re.search(r'\d+x(\d+)', _sz).group(1)) if re.search(r'\d+x(\d+)', _sz) else 2340
+                _nx_found = False
+                for _nx_lbl in ["Next", "NEXT"]:
+                    for _nx_pat in [
+                        rf'text="{re.escape(_nx_lbl)}"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"',
+                        rf'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"[^>]*text="{re.escape(_nx_lbl)}"',
+                    ]:
+                        _nx_m = re.findall(_nx_pat, xml_cur)
+                        if _nx_m:
+                            _nx_x1, _nx_y1, _nx_x2, _nx_y2 = map(int, _nx_m[0])
+                            adb(device, f"shell input tap {(_nx_x1+_nx_x2)//2} {(_nx_y1+_nx_y2)//2}")
+                            print(f"  ✅ [Dispatcher] 'Next' trouvé et cliqué")
+                            _nx_found = True
+                            break
+                    if _nx_found:
+                        break
+                if not _nx_found:
+                    adb(device, f"shell input tap {_bday_w//2} {int(_bday_h*0.88)}")
+                    print(f"  ⚠️ [Dispatcher] 'Next' non trouvé — fallback bas-centre")
                 time.sleep(2)
                 continue
 

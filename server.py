@@ -906,10 +906,12 @@ def check_posting_limit(phone_id, action_type):
     if recent_same:
         last_ts = max(_ts(e["timestamp"]) for e in recent_same)
         elapsed_h = (now_ts - last_ts) / 3600
-        if elapsed_h < POSTING_COOLDOWN_HOURS:
-            remaining_h = POSTING_COOLDOWN_HOURS - elapsed_h
+        min_interval_h = POSTING_COOLDOWN_HOURS / max(max_allowed, 1)
+        if elapsed_h < min_interval_h:
+            remaining_h = min_interval_h - elapsed_h
             return False, (f"⏱️ [{phone_id}] Intervalle {action_type} non respecté : "
-                           f"dernier il y a {elapsed_h:.1f}h — encore {remaining_h:.1f}h à attendre")
+                           f"dernier il y a {elapsed_h:.1f}h — encore {remaining_h:.1f}h à attendre "
+                           f"(intervalle min: {min_interval_h:.1f}h = {POSTING_COOLDOWN_HOURS}h / {max_allowed})")
     if len(recent_same) >= max_allowed:
         return False, (f"⏱️ [{phone_id}] Limite {action_type} atteinte : {len(recent_same)}/{max_allowed} "
                        f"dans les {POSTING_COOLDOWN_HOURS}h")
@@ -4228,6 +4230,7 @@ def post_story():
     phone_ids        = request.form.getlist("phone_ids")
     add_to_highlight = request.form.get("add_to_highlight", "false").lower() == "true"
     highlight_name   = request.form.get("highlight_name", "tuto 1").strip()
+    story_link       = request.form.get("story_link", "").strip()
     if not file or not phone_ids:
         return jsonify({"error": "Média ou téléphones manquants"}), 400
     suffix = os.path.splitext(file.filename)[1]
@@ -4249,7 +4252,7 @@ def post_story():
                     return
                 push_log_swipe("info", f"📱 [Story{hl_label}] Lancement téléphone {pid}...")
                 try:
-                    ok = instagram_code.post_story_on_device(pid, tmp_path, add_to_highlight=add_to_highlight, highlight_name=highlight_name)
+                    ok = instagram_code.post_story_on_device(pid, tmp_path, add_to_highlight=add_to_highlight, highlight_name=highlight_name, story_link=story_link)
                     if ok:
                         record_post_action(pid, "story")
                         push_log_swipe("success", f"✅ Story postée sur {pid}{hl_label}")
