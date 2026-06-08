@@ -2607,11 +2607,32 @@ def open_instagram_after_media(device, phone_id=None, wait_sec=5):
     def _launch_insta():
         adb(device, "shell am force-stop com.instagram.android")
         time.sleep(1)
-        subprocess.run(
-            f'"{ADB_PATH}" -s {device} shell monkey -p com.instagram.android '
-            f'-c android.intent.category.LAUNCHER 1',
-            shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10
-        )
+        # monkey avec timeout court — si ça bloque (VPS Windows), fallback am start
+        _monkey_ok = False
+        try:
+            _mr = subprocess.run(
+                [ADB_PATH, "-s", device, "shell", "monkey",
+                 "-p", "com.instagram.android",
+                 "-c", "android.intent.category.LAUNCHER", "1"],
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=15
+            )
+            _monkey_ok = _mr.returncode == 0
+            if not _monkey_ok:
+                print(f"  ⚠️ monkey retourné {_mr.returncode} — fallback am start")
+        except Exception as _me:
+            print(f"  ⚠️ monkey échoué ({_me.__class__.__name__}) — fallback am start")
+        if not _monkey_ok:
+            try:
+                subprocess.run(
+                    [ADB_PATH, "-s", device, "shell", "am", "start",
+                     "-n", "com.instagram.android/com.instagram.mainactivity.MainActivity",
+                     "-a", "android.intent.action.MAIN",
+                     "-c", "android.intent.category.LAUNCHER"],
+                    capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=15
+                )
+                print(f"  ✅ am start Instagram lancé")
+            except Exception as _ae:
+                print(f"  ⚠️ am start aussi échoué : {_ae.__class__.__name__}")
 
     def _tap_allow_if_present(xml):
         for _at in _allow_kw_list:
@@ -7797,10 +7818,20 @@ def open_instagram(device, photo_folder, city=None, lat=None, lon=None,
             _local_size = os.path.getsize(profile_photo_path)
             remote_profile = f"/sdcard/DCIM/profile_photo/{os.path.basename(profile_photo_path)}"
             adb(device, "shell mkdir -p /sdcard/DCIM/profile_photo")
-            push_res = subprocess.run(
-                [ADB_PATH, "-s", device, "push", profile_photo_path, remote_profile],
-                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60
-            )
+            print(f"  📤 Push photo profil → {remote_profile} (essai {_pp_try+1}/3)...")
+            try:
+                push_res = subprocess.run(
+                    [ADB_PATH, "-s", device, "push", profile_photo_path, remote_profile],
+                    capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60
+                )
+            except subprocess.TimeoutExpired:
+                print(f"  ⚠️ Push photo profil timeout (60s) — essai {_pp_try+1}/3")
+                time.sleep(2)
+                continue
+            except Exception as _push_err:
+                print(f"  ⚠️ Push photo profil exception ({_push_err.__class__.__name__}) : {_push_err}")
+                time.sleep(2)
+                continue
             if push_res.returncode != 0:
                 print(f"  ⚠️ Erreur push photo profil (essai {_pp_try+1}/3) : {push_res.stderr.strip()[:60]}")
                 time.sleep(1)
