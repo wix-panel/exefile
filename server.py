@@ -30,7 +30,11 @@ import tempfile
 # DOIT être identique à celui de code.py pour le partage des photos de profil.
 _TMP_DIR = tempfile.gettempdir()
 
-IS_FROZEN = bool(getattr(sys, "frozen", False) or globals().get("__compiled__"))
+IS_FROZEN = bool(
+    getattr(sys, "frozen", False) or      # PyInstaller
+    globals().get("__compiled__") or      # Nuitka (global de module compilé)
+    os.environ.get("NUITKA_ONEFILE_BINARY")  # Nuitka onefile : env var injectée
+)
 
 def _bundle_dir():
     """Dossier des ressources embarquées (panel.html, code.py, worker.py…)."""
@@ -1544,8 +1548,17 @@ def run_worker_manager(config, sess_state, stop_flag):
             )
 
             if IS_FROZEN:
-                # Binaire compilé : on se relance soi-même en mode worker.
-                _worker_cmd = [sys.executable, "--worker", worker_config]
+                # Nuitka onefile : NUITKA_ONEFILE_BINARY = chemin du vrai .exe
+                # sys.executable peut pointer sur le dossier temp extrait → ne pas l'utiliser directement
+                _nuitka_bin = os.environ.get("NUITKA_ONEFILE_BINARY", "")
+                if _nuitka_bin and os.path.isfile(_nuitka_bin):
+                    _real_exe = _nuitka_bin
+                elif sys.argv and os.path.isfile(sys.argv[0]):
+                    _real_exe = sys.argv[0]
+                else:
+                    _real_exe = sys.executable
+                push_log("info", f"🔧 Worker exe → {_real_exe}")
+                _worker_cmd = [_real_exe, "--worker", worker_config]
             else:
                 _worker_path = os.path.join(_bundle_dir(), "worker.py")
                 _worker_cmd = [sys.executable, "-u", _worker_path, worker_config]
