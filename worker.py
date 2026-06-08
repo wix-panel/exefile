@@ -7,6 +7,14 @@ import time
 import subprocess
 import tempfile
 
+# Force UTF-8 sur Windows (cp1252 ne supporte pas les emojis)
+for _s in (sys.stdout, sys.stderr, getattr(sys, '__stdout__', None), getattr(sys, '__stderr__', None)):
+    if _s and hasattr(_s, 'reconfigure'):
+        try:
+            _s.reconfigure(encoding='utf-8', errors='replace')
+        except Exception:
+            pass
+
 # Lire la config depuis argv[1] (JSON)
 config = json.loads(sys.argv[1])
 
@@ -32,8 +40,13 @@ class FileLogger:
             line = f"[{time.strftime('%H:%M:%S')}] {text.strip()}\n"
             self.f.write(line)
             self.f.flush()
-            sys.__stdout__.write(line)
-            sys.__stdout__.flush()
+            try:
+                sys.__stdout__.write(line)
+                sys.__stdout__.flush()
+            except (UnicodeEncodeError, UnicodeDecodeError):
+                safe = line.encode('utf-8', errors='replace').decode('ascii', errors='replace')
+                sys.__stdout__.write(safe)
+                sys.__stdout__.flush()
     def flush(self):
         self.f.flush()
 
