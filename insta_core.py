@@ -2860,8 +2860,7 @@ def insta_step_email_confirmation_code(device, mail_id, get_new_email_fn=None, m
                 print(f"  ❌ Impossible d'obtenir un nouvel email")
                 return False, None
             print(f"  📧 Nouveau mail : {new_email}")
-            new_email_escaped = new_email.replace("@", "\\@")
-            adb(device, f"shell input text '{new_email_escaped}'")
+            adb(device, f"shell input text '{new_email}'")
             time.sleep(0.5)
             insta_step_next(device)
             time.sleep(2)
@@ -3223,8 +3222,7 @@ def insta_step_enter_email(device, email):
         adb(device, "shell input keyevent KEYCODE_DEL")
         time.sleep(0.2)
 
-        email_escaped = email.replace("@", "\\@")
-        adb(device, f"shell input text '{email_escaped}'")
+        adb(device, f"shell input text '{email}'")
         print(f"  ✅ Email saisi : {email}")
         time.sleep(0.5)
         return True
@@ -3282,16 +3280,28 @@ def add_link_on_device(phone_id: str, link_url: str) -> bool:
 
     connected = False
     for attempt in range(30):
-        subprocess.run(f'"{ADB_PATH}" connect {device}', shell=True, capture_output=True)
+        try:
+            subprocess.run([ADB_PATH, "disconnect", device], capture_output=True, timeout=10)
+        except Exception:
+            pass
+        time.sleep(1)
+        try:
+            subprocess.run([ADB_PATH, "connect", device], capture_output=True, timeout=15)
+        except subprocess.TimeoutExpired:
+            print(f"  ⚠️ glogin [{attempt+1}] connect timeout — retry...")
+            continue
         time.sleep(3)
-        result = subprocess.run(
-            f'"{ADB_PATH}" -s {device} shell glogin {pwd}',
-            shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60
-        )
-        print(f"  glogin [{attempt+1}] → {result.stdout.strip()}")
-        if "success" in result.stdout.lower():
-            connected = True
-            break
+        try:
+            result = subprocess.run(
+                [ADB_PATH, "-s", device, "shell", "glogin", pwd],
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30
+            )
+            print(f"  glogin [{attempt+1}] → {result.stdout.strip()}")
+            if "success" in result.stdout.lower():
+                connected = True
+                break
+        except subprocess.TimeoutExpired:
+            print(f"  ⚠️ glogin [{attempt+1}] timeout — retry...")
     if not connected:
         print(f"  ❌ glogin échoué pour {phone_id}")
         stop_phone(phone_id)
@@ -3624,16 +3634,28 @@ def add_bio_on_device(phone_id: str, bio: str) -> bool:
     # ── 4. Connexion glogin ───────────────────────────────────────────
     connected = False
     for attempt in range(30):
-        subprocess.run(f'"{ADB_PATH}" connect {device}', shell=True, capture_output=True)
+        try:
+            subprocess.run([ADB_PATH, "disconnect", device], capture_output=True, timeout=10)
+        except Exception:
+            pass
+        time.sleep(1)
+        try:
+            subprocess.run([ADB_PATH, "connect", device], capture_output=True, timeout=15)
+        except subprocess.TimeoutExpired:
+            print(f"  ⚠️ glogin [{attempt+1}] connect timeout — retry...")
+            continue
         time.sleep(3)
-        result = subprocess.run(
-            f'"{ADB_PATH}" -s {device} shell glogin {pwd}',
-            shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60
-        )
-        print(f"  glogin [{attempt+1}] → {result.stdout.strip()}")
-        if "success" in result.stdout.lower():
-            connected = True
-            break
+        try:
+            result = subprocess.run(
+                [ADB_PATH, "-s", device, "shell", "glogin", pwd],
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30
+            )
+            print(f"  glogin [{attempt+1}] → {result.stdout.strip()}")
+            if "success" in result.stdout.lower():
+                connected = True
+                break
+        except subprocess.TimeoutExpired:
+            print(f"  ⚠️ glogin [{attempt+1}] timeout — retry...")
     if not connected:
         print(f"  ❌ glogin échoué pour {phone_id}")
         stop_phone(phone_id)
@@ -6352,16 +6374,28 @@ def post_story_on_device(phone_id: str, media_path: str,
     # ── 4. Connexion glogin ───────────────────────────────────────────
     connected = False
     for attempt in range(30):
-        subprocess.run(f'"{ADB_PATH}" connect {device}', shell=True, capture_output=True)
+        try:
+            subprocess.run([ADB_PATH, "disconnect", device], capture_output=True, timeout=10)
+        except Exception:
+            pass
+        time.sleep(1)
+        try:
+            subprocess.run([ADB_PATH, "connect", device], capture_output=True, timeout=15)
+        except subprocess.TimeoutExpired:
+            print(f"  ⚠️ glogin [{attempt+1}] connect timeout — retry...")
+            continue
         time.sleep(3)
-        result = subprocess.run(
-            f'"{ADB_PATH}" -s {device} shell glogin {pwd}',
-            shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60
-        )
-        print(f"  glogin [{attempt+1}] → {result.stdout.strip()}")
-        if "success" in result.stdout.lower():
-            connected = True
-            break
+        try:
+            result = subprocess.run(
+                [ADB_PATH, "-s", device, "shell", "glogin", pwd],
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30
+            )
+            print(f"  glogin [{attempt+1}] → {result.stdout.strip()}")
+            if "success" in result.stdout.lower():
+                connected = True
+                break
+        except subprocess.TimeoutExpired:
+            print(f"  ⚠️ glogin [{attempt+1}] timeout — retry...")
 
     if not connected:
         print(f"  ❌ glogin échoué pour {phone_id}")
@@ -11538,15 +11572,28 @@ def warmup_account_on_device(phone_id: str, duration_minutes: int, usernames: li
 
     connected = False
     for attempt in range(30):
-        subprocess.run(f'"{ADB_PATH}" connect {device}', shell=True, capture_output=True)
+        try:
+            subprocess.run([ADB_PATH, "disconnect", device], capture_output=True, timeout=10)
+        except Exception:
+            pass
+        time.sleep(1)
+        try:
+            subprocess.run([ADB_PATH, "connect", device], capture_output=True, timeout=15)
+        except subprocess.TimeoutExpired:
+            print(f"  ⚠️ glogin [{attempt+1}] connect timeout — retry...")
+            continue
         time.sleep(3)
-        result = subprocess.run(
-            f'"{ADB_PATH}" -s {device} shell glogin {pwd}',
-            shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60
-        )
-        if "success" in result.stdout.lower():
-            connected = True
-            break
+        try:
+            result = subprocess.run(
+                [ADB_PATH, "-s", device, "shell", "glogin", pwd],
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30
+            )
+            print(f"  glogin [{attempt+1}] → {result.stdout.strip()}")
+            if "success" in result.stdout.lower():
+                connected = True
+                break
+        except subprocess.TimeoutExpired:
+            print(f"  ⚠️ glogin [{attempt+1}] timeout — retry...")
     if not connected:
         print(f"  ❌ glogin échoué pour {phone_id}")
         stop_phone(phone_id)
