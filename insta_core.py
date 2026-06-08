@@ -1752,8 +1752,8 @@ def push_photos_to_device(device, folder_path, base_photos_dir=None):
             local_path  = os.path.join(path, photo)
             remote_path = f"/sdcard/DCIM/instagram_photos/{photo}"
             result = subprocess.run(
-                [ADB_PATH, "-s", device, "push", local_path, remote_path],
-                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60
+                f'"{ADB_PATH}" -s {device} push "{local_path}" "{remote_path}"',
+                shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120
             )
             if result.returncode == 0:
                 print(f"  Photo envoyée : {photo}")
@@ -3281,20 +3281,23 @@ def add_link_on_device(phone_id: str, link_url: str) -> bool:
     connected = False
     for attempt in range(30):
         try:
-            subprocess.run([ADB_PATH, "disconnect", device], capture_output=True, timeout=10)
+            subprocess.run(f'"{ADB_PATH}" disconnect {device}', shell=True, capture_output=True, timeout=10)
         except Exception:
             pass
         time.sleep(1)
         try:
-            subprocess.run([ADB_PATH, "connect", device], capture_output=True, timeout=15)
+            subprocess.run(f'"{ADB_PATH}" connect {device}', shell=True, capture_output=True, timeout=15)
         except subprocess.TimeoutExpired:
             print(f"  ⚠️ glogin [{attempt+1}] connect timeout — retry...")
+            continue
+        except Exception as _ce:
+            print(f"  ⚠️ glogin [{attempt+1}] connect erreur ({_ce}) — retry...")
             continue
         time.sleep(3)
         try:
             result = subprocess.run(
-                [ADB_PATH, "-s", device, "shell", "glogin", pwd],
-                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30
+                f'"{ADB_PATH}" -s {device} shell glogin {pwd}',
+                shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30
             )
             print(f"  glogin [{attempt+1}] → {result.stdout.strip()}")
             if "success" in result.stdout.lower():
@@ -3635,20 +3638,23 @@ def add_bio_on_device(phone_id: str, bio: str) -> bool:
     connected = False
     for attempt in range(30):
         try:
-            subprocess.run([ADB_PATH, "disconnect", device], capture_output=True, timeout=10)
+            subprocess.run(f'"{ADB_PATH}" disconnect {device}', shell=True, capture_output=True, timeout=10)
         except Exception:
             pass
         time.sleep(1)
         try:
-            subprocess.run([ADB_PATH, "connect", device], capture_output=True, timeout=15)
+            subprocess.run(f'"{ADB_PATH}" connect {device}', shell=True, capture_output=True, timeout=15)
         except subprocess.TimeoutExpired:
             print(f"  ⚠️ glogin [{attempt+1}] connect timeout — retry...")
+            continue
+        except Exception as _ce:
+            print(f"  ⚠️ glogin [{attempt+1}] connect erreur ({_ce}) — retry...")
             continue
         time.sleep(3)
         try:
             result = subprocess.run(
-                [ADB_PATH, "-s", device, "shell", "glogin", pwd],
-                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30
+                f'"{ADB_PATH}" -s {device} shell glogin {pwd}',
+                shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30
             )
             print(f"  glogin [{attempt+1}] → {result.stdout.strip()}")
             if "success" in result.stdout.lower():
@@ -4017,8 +4023,8 @@ def post_reel_on_device(phone_id: str, media_paths: list) -> bool:
         filename = os.path.basename(media_path)
         remote = f"{remote_dir}/{filename}"
         push_result = subprocess.run(
-            [ADB_PATH, "-s", device, "push", media_path, remote],
-            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60
+            f'"{ADB_PATH}" -s {device} push "{media_path}" "{remote}"',
+            shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180
         )
         if push_result.returncode == 0:
             print(f"  ✅ Média poussé : {filename}")
@@ -4936,8 +4942,8 @@ def post_feed_on_device(phone_id: str, media_paths: list) -> bool:
         filename = os.path.basename(media_path)
         remote = f"{remote_dir}/{filename}"
         push_result = subprocess.run(
-            [ADB_PATH, "-s", device, "push", media_path, remote],
-            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60
+            f'"{ADB_PATH}" -s {device} push "{media_path}" "{remote}"',
+            shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180
         )
         if push_result.returncode == 0:
             print(f"  ✅ Photo poussée : {filename}")
@@ -6375,20 +6381,23 @@ def post_story_on_device(phone_id: str, media_path: str,
     connected = False
     for attempt in range(30):
         try:
-            subprocess.run([ADB_PATH, "disconnect", device], capture_output=True, timeout=10)
+            subprocess.run(f'"{ADB_PATH}" disconnect {device}', shell=True, capture_output=True, timeout=10)
         except Exception:
             pass
         time.sleep(1)
         try:
-            subprocess.run([ADB_PATH, "connect", device], capture_output=True, timeout=15)
+            subprocess.run(f'"{ADB_PATH}" connect {device}', shell=True, capture_output=True, timeout=15)
         except subprocess.TimeoutExpired:
             print(f"  ⚠️ glogin [{attempt+1}] connect timeout — retry...")
+            continue
+        except Exception as _ce:
+            print(f"  ⚠️ glogin [{attempt+1}] connect erreur ({_ce}) — retry...")
             continue
         time.sleep(3)
         try:
             result = subprocess.run(
-                [ADB_PATH, "-s", device, "shell", "glogin", pwd],
-                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30
+                f'"{ADB_PATH}" -s {device} shell glogin {pwd}',
+                shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30
             )
             print(f"  glogin [{attempt+1}] → {result.stdout.strip()}")
             if "success" in result.stdout.lower():
@@ -6408,8 +6417,8 @@ def post_story_on_device(phone_id: str, media_path: str,
     remote    = f"/sdcard/DCIM/story_media/{filename}"
     adb(device, "shell mkdir -p /sdcard/DCIM/story_media")
     push_result = subprocess.run(
-        [ADB_PATH, "-s", device, "push", media_path, remote],
-        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60
+        f'"{ADB_PATH}" -s {device} push "{media_path}" "{remote}"',
+        shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120
     )
     if push_result.returncode != 0:
         print(f"  ❌ Push média échoué : {push_result.stderr.strip()[:80]}")
@@ -7855,11 +7864,16 @@ def open_instagram(device, photo_folder, city=None, lat=None, lon=None,
             print(f"  📤 Push photo profil → {remote_profile} (essai {_pp_try+1}/3)...")
             try:
                 push_res = subprocess.run(
-                    [ADB_PATH, "-s", device, "push", profile_photo_path, remote_profile],
-                    capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60
+                    f'"{ADB_PATH}" -s {device} push "{profile_photo_path}" "{remote_profile}"',
+                    shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120
                 )
             except subprocess.TimeoutExpired:
-                print(f"  ⚠️ Push photo profil timeout (60s) — essai {_pp_try+1}/3")
+                print(f"  ⚠️ Push photo profil timeout (120s) — essai {_pp_try+1}/3 — reconnect ADB...")
+                try:
+                    subprocess.run(f'"{ADB_PATH}" disconnect {device}', shell=True, capture_output=True, timeout=10)
+                    subprocess.run(f'"{ADB_PATH}" connect {device}', shell=True, capture_output=True, timeout=15)
+                except Exception:
+                    pass
                 time.sleep(2)
                 continue
             except Exception as _push_err:
@@ -11573,20 +11587,23 @@ def warmup_account_on_device(phone_id: str, duration_minutes: int, usernames: li
     connected = False
     for attempt in range(30):
         try:
-            subprocess.run([ADB_PATH, "disconnect", device], capture_output=True, timeout=10)
+            subprocess.run(f'"{ADB_PATH}" disconnect {device}', shell=True, capture_output=True, timeout=10)
         except Exception:
             pass
         time.sleep(1)
         try:
-            subprocess.run([ADB_PATH, "connect", device], capture_output=True, timeout=15)
+            subprocess.run(f'"{ADB_PATH}" connect {device}', shell=True, capture_output=True, timeout=15)
         except subprocess.TimeoutExpired:
             print(f"  ⚠️ glogin [{attempt+1}] connect timeout — retry...")
+            continue
+        except Exception as _ce:
+            print(f"  ⚠️ glogin [{attempt+1}] connect erreur ({_ce}) — retry...")
             continue
         time.sleep(3)
         try:
             result = subprocess.run(
-                [ADB_PATH, "-s", device, "shell", "glogin", pwd],
-                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30
+                f'"{ADB_PATH}" -s {device} shell glogin {pwd}',
+                shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30
             )
             print(f"  glogin [{attempt+1}] → {result.stdout.strip()}")
             if "success" in result.stdout.lower():
